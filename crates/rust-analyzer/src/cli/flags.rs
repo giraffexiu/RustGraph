@@ -194,6 +194,9 @@ xflags::xflags! {
             /// Output file for call hierarchy data.
             optional --output path: PathBuf
 
+            /// Filter out external library calls.
+            optional --filter-external
+
             /// Disable build script running.
             optional --disable-build-scripts
 
@@ -356,6 +359,7 @@ pub struct Scip {
 pub struct CallHierarchy {
     pub path: PathBuf,
     pub output: Option<PathBuf>,
+    pub filter_external: bool,
     pub disable_build_scripts: bool,
     pub disable_proc_macros: bool,
     pub proc_macro_srv: Option<PathBuf>,

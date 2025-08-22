@@ -61,12 +61,15 @@ impl flags::CallHierarchy {
         let host = AnalysisHost::with_database(db.clone());
         let analysis = host.analysis();
         
+        // Get project root path
+        let project_root = AbsPathBuf::assert_utf8(env::current_dir()?.join(&self.path));
+        
         eprintln!("Extracting functions...");
-        let functions = extract_all_functions(&db, &vfs)?;
+        let functions = extract_all_functions(&db, &vfs, self.filter_external, &project_root)?;
         eprintln!("Found {} functions", functions.len());
         
         eprintln!("Analyzing call relationships...");
-        let call_relations = analyze_call_relationships(&analysis, &functions, &vfs, &db)?;
+        let call_relations = analyze_call_relationships(&analysis, &functions, &vfs, &db, self.filter_external, &project_root)?;
         eprintln!("Found {} call relationships", call_relations.len());
         
         eprintln!("Writing output...");
@@ -77,7 +80,43 @@ impl flags::CallHierarchy {
     }
 }
 
-fn extract_all_functions(db: &ide::RootDatabase, vfs: &Vfs) -> Result<Vec<FunctionInfo>> {
+/// Check if a file path is external to the project
+fn is_external_path(file_path: &str, project_root: &AbsPathBuf) -> bool {
+    let project_root_str = project_root.to_string();
+    
+    // Check if the file is outside the project root
+    if !file_path.starts_with(&project_root_str) {
+        return true;
+    }
+    
+    // Check for external third-party library paths (but not standard library)
+    if file_path.contains(".cargo/registry/") ||
+       file_path.contains(".cargo/git/") {
+        return true;
+    }
+    
+    // Check for Anchor framework external libraries (both conditions must be met)
+    if file_path.contains(".cargo/registry/") && 
+       (file_path.contains("anchor-") || file_path.contains("/anchor/")) {
+        return true;
+    }
+    
+    // Check for build artifacts and dependencies within project
+    if file_path.contains("/target/") ||
+       file_path.contains("/build/") ||
+       file_path.contains("/deps/") {
+        return true;
+    }
+    
+    false
+}
+
+fn extract_all_functions(
+    db: &ide::RootDatabase, 
+    vfs: &Vfs, 
+    filter_external: bool, 
+    project_root: &AbsPathBuf
+) -> Result<Vec<FunctionInfo>> {
     let mut functions = Vec::new();
     let mut visited_modules = FxHashSet::default();
     let mut visit_queue = Vec::new();
@@ -100,7 +139,10 @@ fn extract_all_functions(db: &ide::RootDatabase, vfs: &Vfs) -> Result<Vec<Functi
             for decl in module.declarations(db) {
                 if let ModuleDef::Function(func) = decl {
                     if let Some(func_info) = extract_function_info(db, func, vfs)? {
-                        functions.push(func_info);
+                        // Apply filtering if enabled
+                        if !filter_external || !is_external_path(&func_info.file_path, project_root) {
+                            functions.push(func_info);
+                        }
                     }
                 }
             }
@@ -110,7 +152,10 @@ fn extract_all_functions(db: &ide::RootDatabase, vfs: &Vfs) -> Result<Vec<Functi
                 for item in impl_def.items(db) {
                     if let hir::AssocItem::Function(func) = item {
                         if let Some(func_info) = extract_function_info(db, func, vfs)? {
-                            functions.push(func_info);
+                            // Apply filtering if enabled
+                            if !filter_external || !is_external_path(&func_info.file_path, project_root) {
+                                functions.push(func_info);
+                            }
                         }
                     }
                 }
@@ -164,6 +209,8 @@ fn analyze_call_relationships(
     functions: &[FunctionInfo],
     vfs: &Vfs,
     db: &ide::RootDatabase,
+    filter_external: bool,
+    project_root: &AbsPathBuf,
 ) -> Result<Vec<CallRelation>> {
     let mut call_relations = Vec::new();
     
@@ -199,6 +246,8 @@ fn analyze_call_relationships(
                                  &call_item,
                                  vfs,
                                  db,
+                                 filter_external,
+                                 project_root,
                              )? {
                                  call_relations.push(call_relation);
                              }
@@ -228,6 +277,8 @@ fn create_call_relation_from_item(
     call_item: &CallItem,
     vfs: &Vfs,
     db: &ide::RootDatabase,
+    filter_external: bool,
+    project_root: &AbsPathBuf,
 ) -> Result<Option<CallRelation>> {
     let target = &call_item.target;
     
@@ -250,10 +301,16 @@ fn create_call_relation_from_item(
     
     let callee_info = FunctionInfo {
         name: target.name.to_string(),
-        file_path,
+        file_path: file_path.clone(),
         line: line_col.line + 1,
         column: line_col.col + 1,
     };
+    
+    // Apply filtering if enabled - only filter if caller is external, not callee
+    // We want to keep calls from project functions to standard library (like Ok)
+    if filter_external && is_external_path(&caller_func.file_path, project_root) {
+        return Ok(None);
+    }
     
     // Get call site information
     let (_call_line_col, call_site_line, call_site_column) = if let Some(range_info) = call_item.ranges.first() {

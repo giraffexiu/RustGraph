@@ -1,0 +1,5 @@
+# Function Call Hierarchy Analysis
+# Format: caller_function -> callee_function (call_site)
+
+/Users/giraffe/Downloads/Work/Solana/anchor-analyze/program-examples/basics/counter/anchor/programs/counter_anchor/src/lib.rs:11:initialize_counter -> /Users/giraffe/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/result.rs:553:Ok (call at 12:9)
+/Users/giraffe/Downloads/Work/Solana/anchor-analyze/program-examples/basics/counter/anchor/programs/counter_anchor/src/lib.rs:15:increment -> /Users/giraffe/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/result.rs:553:Ok (call at 17:9)
