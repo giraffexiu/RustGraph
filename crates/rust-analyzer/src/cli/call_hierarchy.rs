@@ -1,6 +1,6 @@
 use std::{env, fs, io::Write, path::PathBuf};
 use anyhow::Result;
-use hir::{Crate, HasSource, ModuleDef};
+use hir::{Crate, ModuleDef, Semantics};
 use ide::{Analysis, AnalysisHost, CallHierarchyConfig, CallItem, FilePosition, LineCol};
 use ide_db::{EditionedFileId, LineIndexDatabase};
 use load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace};
@@ -126,14 +126,23 @@ fn extract_function_info(
     func: hir::Function,
     vfs: &Vfs,
 ) -> Result<Option<FunctionInfo>> {
-    if let Some(source) = func.source(db) {
-        let original_file_id = source.file_id.original_file(db);
+    // Create Semantics instance to handle proper text range mapping
+    let sema = Semantics::new(db);
+    
+    if let Some(source) = sema.source(func) {
+        let syntax_node = source.value.syntax();
+        
+        // Use original_range to map syntax node to its original file range
+        // This ensures text_range and line_index correspond to the same file
+        let original_range = sema.original_range(syntax_node);
+        let original_file_id = original_range.file_id;
+        let text_range = original_range.range;
+        
         let file_id = original_file_id.file_id(db);
         let path = vfs.file_path(file_id);
         let file_path = path.to_string();
         
-        let syntax_node = source.value.syntax();
-        let text_range = syntax_node.text_range();
+        // Now line_index and text_range are guaranteed to be from the same file
         let line_index = db.line_index(original_file_id.file_id(db));
         let line_col = line_index.line_col(text_range.start());
         
@@ -161,36 +170,44 @@ fn analyze_call_relationships(
     for func in functions {
         // Find the file_id for this function
         if let Some(file_id) = find_file_id_by_path(vfs, &func.file_path) {
+            // Use EditionedFileId for consistent file handling
             let editioned_file_id = EditionedFileId::current_edition(db, file_id);
             let line_index = db.line_index(editioned_file_id.file_id(db));
-            let offset = line_index.offset(LineCol {
-                line: func.line - 1, // Convert back to 0-based
-                col: func.column - 1, // Convert back to 0-based
-            });
             
-            if let Some(offset) = offset {
-                let position = FilePosition { file_id: file_id, offset };
-                
-                let config = CallHierarchyConfig {
-                    exclude_tests: false,
-                };
-                
-                // Get outgoing calls (functions this function calls)
-                if let Ok(Some(outgoing_calls)) = analysis.outgoing_calls(config, position) {
-                    for call_item in outgoing_calls {
-                        if let Some(call_relation) = create_call_relation_from_item(
-                            func,
-                            &call_item,
-                            vfs,
-                            db,
-                        )? {
-                            call_relations.push(call_relation);
-                        }
-                    }
-                }
-            }
-        }
-    }
+            // Ensure line and column are within valid range before creating offset
+            let line_col = LineCol {
+                line: func.line.saturating_sub(1), // Convert to 0-based with bounds check
+                col: func.column.saturating_sub(1), // Convert to 0-based with bounds check
+            };
+            
+            // Validate that the line_col is within the file bounds
+             if line_col.line < line_index.len().into() {
+                 let offset = line_index.offset(line_col);
+                 
+                 if let Some(offset) = offset {
+                     let position = FilePosition { file_id: file_id, offset };
+                     
+                     let config = CallHierarchyConfig {
+                         exclude_tests: false,
+                     };
+                     
+                     // Get outgoing calls (functions this function calls)
+                     if let Ok(Some(outgoing_calls)) = analysis.outgoing_calls(config, position) {
+                         for call_item in outgoing_calls {
+                             if let Some(call_relation) = create_call_relation_from_item(
+                                 func,
+                                 &call_item,
+                                 vfs,
+                                 db,
+                             )? {
+                                 call_relations.push(call_relation);
+                             }
+                         }
+                     }
+                 }
+             }
+         }
+     }
     
     Ok(call_relations)
 }
@@ -219,8 +236,16 @@ fn create_call_relation_from_item(
     let path = vfs.file_path(file_id);
     let file_path = path.to_string();
     
-    let line_index = db.line_index(file_id);
+    // Convert vfs::FileId to EditionedFileId for line_index
+    let editioned_file_id = EditionedFileId::current_edition(db, file_id);
+    let line_index = db.line_index(editioned_file_id.file_id(db));
     let target_range = target.focus_or_full_range();
+    
+    // Validate target_range is within file bounds
+    if target_range.start() > line_index.len().into() {
+        return Ok(None); // Skip this item if range is invalid
+    }
+    
     let line_col = line_index.line_col(target_range.start());
     
     let callee_info = FunctionInfo {
@@ -231,14 +256,33 @@ fn create_call_relation_from_item(
     };
     
     // Get call site information
-    let call_range = call_item.ranges.first().map(|r| r.range).unwrap_or(target_range);
-    let call_line_col = line_index.line_col(call_range.start());
+    let (_call_line_col, call_site_line, call_site_column) = if let Some(range_info) = call_item.ranges.first() {
+        let call_file_id = range_info.file_id;
+        let call_range = range_info.range;
+        
+        // Use the correct line_index for the call site file
+        let call_editioned_file_id = EditionedFileId::current_edition(db, call_file_id);
+        let call_line_index = db.line_index(call_editioned_file_id.file_id(db));
+        
+        // Validate call_range is within file bounds
+        if call_range.start() > call_line_index.len().into() {
+            return Ok(None); // Skip this item if range is invalid
+        }
+        
+        let call_line_col = call_line_index.line_col(call_range.start());
+        
+        (call_line_col, call_line_col.line + 1, call_line_col.col + 1)
+    } else {
+        // Fallback to target range if no call ranges available
+        let call_line_col = line_index.line_col(target_range.start());
+        (call_line_col, call_line_col.line + 1, call_line_col.col + 1)
+    };
     
     let call_relation = CallRelation {
         caller: caller_func.clone(),
         callee: callee_info,
-        call_site_line: call_line_col.line + 1,
-        call_site_column: call_line_col.col + 1,
+        call_site_line,
+        call_site_column,
     };
     
     Ok(Some(call_relation))
