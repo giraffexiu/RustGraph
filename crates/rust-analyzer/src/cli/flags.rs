@@ -185,6 +185,27 @@ xflags::xflags! {
             /// Exclude code from vendored libraries from the resulting index.
             optional --exclude-vendored-libraries
         }
+
+        /// Generate function call hierarchy analysis.
+        cmd call-hierarchy {
+            /// Path to the Rust project.
+            required path: PathBuf
+
+            /// Output file for call hierarchy data.
+            optional --output path: PathBuf
+
+            /// Disable build script running.
+            optional --disable-build-scripts
+
+            /// Disable proc-macro expansion.
+            optional --disable-proc-macros
+
+            /// Path to the proc-macro server.
+            optional --proc-macro-srv path: PathBuf
+
+            /// Include dependencies in analysis.
+            optional --with-deps
+        }
     }
 }
 
@@ -217,6 +238,7 @@ pub enum RustAnalyzerCmd {
     Search(Search),
     Lsif(Lsif),
     Scip(Scip),
+    CallHierarchy(CallHierarchy),
 }
 
 #[derive(Debug)]
@@ -328,6 +350,16 @@ pub struct Scip {
     pub output: Option<PathBuf>,
     pub config_path: Option<PathBuf>,
     pub exclude_vendored_libraries: bool,
+}
+
+#[derive(Debug)]
+pub struct CallHierarchy {
+    pub path: PathBuf,
+    pub output: Option<PathBuf>,
+    pub disable_build_scripts: bool,
+    pub disable_proc_macros: bool,
+    pub proc_macro_srv: Option<PathBuf>,
+    pub with_deps: bool,
 }
 
 impl RustAnalyzer {

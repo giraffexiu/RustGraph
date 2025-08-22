@@ -86,6 +86,7 @@ fn actual_main() -> anyhow::Result<ExitCode> {
             cmd.run(&mut std::io::stdout(), Some(project_model::RustLibSource::Discover))?
         }
         flags::RustAnalyzerCmd::Scip(cmd) => cmd.run()?,
+        flags::RustAnalyzerCmd::CallHierarchy(cmd) => cmd.run()?,
         flags::RustAnalyzerCmd::RunTests(cmd) => cmd.run()?,
         flags::RustAnalyzerCmd::RustcTests(cmd) => cmd.run()?,
         flags::RustAnalyzerCmd::PrimeCaches(cmd) => cmd.run()?,
