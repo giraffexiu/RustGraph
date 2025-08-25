@@ -57,10 +57,9 @@ TEMP_OUTPUT=$(mktemp /tmp/call_graph_XXXXXX.txt)
 # Ensure cleanup on exit
 trap "rm -f '$TEMP_OUTPUT'" EXIT
 
-if ! "$RUST_ANALYZER_BINARY" call-hierarchy \
+if ! "$RUST_ANALYZER_BINARY" function-analyzer \
     "$PROJECT_PATH" \
-    --output "$TEMP_OUTPUT" \
-    --filter-external; then
+    --output "$TEMP_OUTPUT"; then
     echo "Call graph analysis failed"
     exit 1
 fi
@@ -71,7 +70,7 @@ echo "Call graph analysis completed"
 echo "Generating JSON analysis..."
 cd "$SCRIPT_DIR"
 
-# Extract project name from path
+# Extract project name from path for output file naming
 PROJECT_NAME=$(basename "$PROJECT_PATH")
 
 if ! python3 json_processor.py "$TEMP_OUTPUT" "$PROJECT_NAME"; then

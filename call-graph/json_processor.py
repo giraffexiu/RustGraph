@@ -1,6 +1,7 @@
 import re
 import json
 import os
+import sys
 import networkx as nx
 from typing import Dict, List
 from dataclasses import dataclass
@@ -109,16 +110,19 @@ class CallGraphAnalyzer:
         return json.dumps(result, indent=2, ensure_ascii=False)
 
 def main():
-    """Main function"""
-    import sys
-    
-    if len(sys.argv) != 3:
-        print("Usage: python call_graph_analyzer.py <input_file> <project_name>")
+    if len(sys.argv) < 2 or len(sys.argv) > 3:
+        print("Usage: python call_graph_analyzer.py <input_file> [project_name]")
         print("Example: python call_graph_analyzer.py ../temp_file.txt mango-v3")
         sys.exit(1)
     
     input_file = sys.argv[1]
-    project_name = sys.argv[2]
+    
+    # Use provided project name if available, otherwise extract from input filename
+    if len(sys.argv) == 3:
+        project_name = sys.argv[2]
+    else:
+        input_basename = os.path.basename(input_file)
+        project_name = os.path.splitext(input_basename)[0]
     
     # Generate output filename based on project name
     input_name = project_name

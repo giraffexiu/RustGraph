@@ -65,15 +65,15 @@ impl flags::FunctionAnalyzer {
         let project_root = AbsPathBuf::assert_utf8(env::current_dir()?.join(&self.path));
         
         eprintln!("Extracting functions...");
-        let functions = extract_all_functions(&db, &vfs, self.filter_external, &project_root)?;
+        let functions = extract_all_functions(&db, &vfs, &project_root)?;
         eprintln!("Found {} functions", functions.len());
         
         eprintln!("Analyzing call relationships...");
-        let call_relations = analyze_call_relationships(&analysis, &functions, &vfs, &db, self.filter_external, &project_root)?;
+        let call_relations = analyze_call_relationships(&analysis, &functions, &vfs, &db, &project_root)?;
         eprintln!("Found {} call relationships", call_relations.len());
         
         eprintln!("Writing output...");
-        write_output(&call_relations, &self.output)?;
+        write_output(&call_relations, &self.output, &project_root)?;
         
         eprintln!("Call hierarchy analysis completed!");
         Ok(())
@@ -114,7 +114,6 @@ fn is_external_path(file_path: &str, project_root: &AbsPathBuf) -> bool {
 fn extract_all_functions(
     db: &ide::RootDatabase, 
     vfs: &Vfs, 
-    filter_external: bool, 
     project_root: &AbsPathBuf
 ) -> Result<Vec<FunctionInfo>> {
     let mut functions = Vec::new();
@@ -139,8 +138,8 @@ fn extract_all_functions(
             for decl in module.declarations(db) {
                 if let ModuleDef::Function(func) = decl {
                     if let Some(func_info) = extract_function_info(db, func, vfs)? {
-                        // Apply filtering if enabled
-                        if !filter_external || !is_external_path(&func_info.file_path, project_root) {
+                        // Filter out external library calls
+                        if !is_external_path(&func_info.file_path, project_root) {
                             functions.push(func_info);
                         }
                     }
@@ -152,8 +151,8 @@ fn extract_all_functions(
                 for item in impl_def.items(db) {
                     if let hir::AssocItem::Function(func) = item {
                         if let Some(func_info) = extract_function_info(db, func, vfs)? {
-                            // Apply filtering if enabled
-                            if !filter_external || !is_external_path(&func_info.file_path, project_root) {
+                            // Filter out external library calls
+                            if !is_external_path(&func_info.file_path, project_root) {
                                 functions.push(func_info);
                             }
                         }
@@ -209,7 +208,6 @@ fn analyze_call_relationships(
     functions: &[FunctionInfo],
     vfs: &Vfs,
     db: &ide::RootDatabase,
-    filter_external: bool,
     project_root: &AbsPathBuf,
 ) -> Result<Vec<CallRelation>> {
     let mut call_relations = Vec::new();
@@ -246,7 +244,6 @@ fn analyze_call_relationships(
                                  &call_item,
                                  vfs,
                                  db,
-                                 filter_external,
                                  project_root,
                              )? {
                                  call_relations.push(call_relation);
@@ -277,7 +274,6 @@ fn create_call_relation_from_item(
     call_item: &CallItem,
     vfs: &Vfs,
     db: &ide::RootDatabase,
-    filter_external: bool,
     project_root: &AbsPathBuf,
 ) -> Result<Option<CallRelation>> {
     let target = &call_item.target;
@@ -306,9 +302,9 @@ fn create_call_relation_from_item(
         column: line_col.col + 1,
     };
     
-    // Apply filtering if enabled - only filter if caller is external, not callee
+    // Filter out external library calls - only filter if caller is external, not callee
     // We want to keep calls from project functions to standard library (like Ok)
-    if filter_external && is_external_path(&caller_func.file_path, project_root) {
+    if is_external_path(&caller_func.file_path, project_root) {
         return Ok(None);
     }
     
@@ -345,7 +341,20 @@ fn create_call_relation_from_item(
     Ok(Some(call_relation))
 }
 
-fn write_output(call_relations: &[CallRelation], output_path: &Option<PathBuf>) -> Result<()> {
+fn convert_to_relative_path(file_path: &str, project_root: &AbsPathBuf) -> String {
+    let abs_path = std::path::Path::new(file_path);
+    let project_root_path = std::path::Path::new(project_root.as_str());
+    
+    // Try to create relative path
+    if let Ok(relative_path) = abs_path.strip_prefix(project_root_path) {
+        relative_path.to_string_lossy().to_string()
+    } else {
+        // If path is outside project root, keep absolute path
+        file_path.to_string()
+    }
+}
+
+fn write_output(call_relations: &[CallRelation], output_path: &Option<PathBuf>, project_root: &AbsPathBuf) -> Result<()> {
     let output = match output_path {
         Some(path) => {
             let file = fs::File::create(path)?;
@@ -363,13 +372,16 @@ fn write_output(call_relations: &[CallRelation], output_path: &Option<PathBuf>) 
     
     // Write call relations
     for relation in call_relations {
+        let caller_relative_path = convert_to_relative_path(&relation.caller.file_path, project_root);
+        let callee_relative_path = convert_to_relative_path(&relation.callee.file_path, project_root);
+        
         writeln!(
             writer,
             "{}:{}:{} -> {}:{}:{} (call at {}:{})",
-            relation.caller.file_path,
+            caller_relative_path,
             relation.caller.line,
             relation.caller.name,
-            relation.callee.file_path,
+            callee_relative_path,
             relation.callee.line,
             relation.callee.name,
             relation.call_site_line,
