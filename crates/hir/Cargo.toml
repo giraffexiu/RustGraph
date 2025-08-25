@@ -43,8 +43,7 @@ tracing-subscriber.workspace = true
 tracing-tree.workspace = true
 
 # local deps
-test-utils.workspace = true
-test-fixture.workspace = true
+
 syntax-bridge.workspace = true
 
 [features]

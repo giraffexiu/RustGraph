@@ -28,7 +28,7 @@ intern.workspace = true
 syntax-bridge.workspace = true
 
 [dev-dependencies]
-test-utils.workspace = true
+
 expect-test.workspace = true
 syntax.workspace = true
 

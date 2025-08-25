@@ -1,6 +1,5 @@
 [workspace]
-members = ["xtask/", "lib/*", "crates/*"]
-exclude = ["crates/proc-macro-srv/proc-macro-test/imp"]
+members = ["lib/*", "crates/*"]
 resolver = "2"
 
 [workspace.package]
@@ -83,6 +82,7 @@ syntax = { path = "./crates/syntax", version = "0.0.0" }
 syntax-bridge = { path = "./crates/syntax-bridge", version = "0.0.0" }
 test-fixture = { path = "./crates/test-fixture", version = "0.0.0" }
 test-utils = { path = "./crates/test-utils", version = "0.0.0" }
+
 toolchain = { path = "./crates/toolchain", version = "0.0.0" }
 tt = { path = "./crates/tt", version = "0.0.0" }
 vfs-notify = { path = "./crates/vfs-notify", version = "0.0.0" }

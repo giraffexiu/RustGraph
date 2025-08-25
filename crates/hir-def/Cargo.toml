@@ -51,8 +51,7 @@ thin-vec = "0.2.14"
 expect-test.workspace = true
 
 # local deps
-test-utils.workspace = true
-test-fixture.workspace = true
+
 syntax-bridge.workspace = true
 
 [features]
