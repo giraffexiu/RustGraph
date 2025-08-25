@@ -187,7 +187,7 @@ xflags::xflags! {
         }
 
         /// Generate function call hierarchy analysis.
-        cmd call-hierarchy {
+        cmd function-analyzer {
             /// Path to the Rust project.
             required path: PathBuf
 
@@ -241,7 +241,7 @@ pub enum RustAnalyzerCmd {
     Search(Search),
     Lsif(Lsif),
     Scip(Scip),
-    CallHierarchy(CallHierarchy),
+    FunctionAnalyzer(FunctionAnalyzer),
 }
 
 #[derive(Debug)]
@@ -356,7 +356,7 @@ pub struct Scip {
 }
 
 #[derive(Debug)]
-pub struct CallHierarchy {
+pub struct FunctionAnalyzer {
     pub path: PathBuf,
     pub output: Option<PathBuf>,
     pub filter_external: bool,

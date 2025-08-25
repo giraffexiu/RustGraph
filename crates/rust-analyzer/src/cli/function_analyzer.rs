@@ -26,7 +26,7 @@ struct CallRelation {
     call_site_column: u32,
 }
 
-impl flags::CallHierarchy {
+impl flags::FunctionAnalyzer {
     pub fn run(self) -> Result<()> {
         eprintln!("Loading workspace...");
         

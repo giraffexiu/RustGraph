@@ -3,7 +3,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod analysis_stats;
-mod call_hierarchy;
+mod function_analyzer;
 mod diagnostics;
 pub mod flags;
 mod highlight;

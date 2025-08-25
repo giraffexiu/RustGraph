@@ -12,8 +12,8 @@ class Function:
     file_path: str
     line: int
     name: str
-    call_count: int = 0  # 当前函数调用其他函数的总次数
-    calls: List[str] = None  # 当前函数调用的函数名称列表（允许重复）
+    call_count: int = 0  # Total number of function calls made by this function
+    calls: List[str] = None  # List of function names called by this function (duplicates allowed)
     
     def __post_init__(self):
         if self.calls is None:
@@ -77,10 +77,10 @@ class CallGraphAnalyzer:
         if callee_id not in self.functions:
             self.functions[callee_id] = callee
         
-        # 增加调用者的调用次数
+        # Increment caller's call count
         self.functions[caller_id].call_count += 1
         
-        # 记录调用者调用的函数（允许重复记录）
+        # Record the function called by the caller (duplicates allowed)
         self.functions[caller_id].calls.append(callee_id)
         
         # Add edge to graph
