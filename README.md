@@ -1,4 +1,4 @@
-# Rust Call Graph Analyzer
+# RustGraph
 
 [English](#english) | [中文](#中文)
 
@@ -8,7 +8,7 @@
 
 ### Overview
 
-Rust Call Graph Analyzer is a powerful static analysis tool built on top of rust-analyzer that extracts and analyzes function call relationships in Rust projects. It's specifically optimized for Solana/Anchor blockchain projects but works with any Rust codebase.
+RustGraph is a powerful static analysis tool built on top of rust-analyzer that extracts and analyzes function call relationships in Rust projects. It's specifically optimized for Solana/Anchor blockchain projects but works with any Rust codebase.
 
 ### Key Features
 
@@ -41,7 +41,7 @@ The tool leverages rust-analyzer's semantic analysis capabilities to:
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd rust-call-graph-analyzer
+cd rustgraph
 
 # Build the tool
 cargo build --release
@@ -126,7 +126,7 @@ The tool consists of several key components:
 
 ### 概述
 
-Rust Call Graph Analyzer 是一个基于 rust-analyzer 构建的强大静态分析工具，用于提取和分析 Rust 项目中的函数调用关系。它专门针对 Solana/Anchor 区块链项目进行了优化，但适用于任何 Rust 代码库。
+RustGraph 是一个基于 rust-analyzer 构建的强大静态分析工具，用于提取和分析 Rust 项目中的函数调用关系。它专门针对 Solana/Anchor 区块链项目进行了优化，但适用于任何 Rust 代码库。
 
 ### 主要特性
 
@@ -159,7 +159,7 @@ Rust Call Graph Analyzer 是一个基于 rust-analyzer 构建的强大静态分�
 ```bash
 # 克隆仓库
 git clone <repository-url>
-cd rust-call-graph-analyzer
+cd rustgraph
 
 # 构建工具
 cargo build --release
