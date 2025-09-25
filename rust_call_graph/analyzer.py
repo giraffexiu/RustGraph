@@ -1,0 +1,170 @@
+"""
+Rust Call Graph Analyzer
+
+Main analyzer module that provides a clean interface for analyzing Rust projects.
+"""
+
+import os
+import sys
+import json
+import subprocess
+from pathlib import Path
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
+
+
+@dataclass
+class AnalysisResult:
+    """Analysis result container"""
+    success: bool
+    data: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    output_file: Optional[str] = None
+    function_count: int = 0
+
+
+class RustCallGraphAnalyzer:
+    """
+    Main analyzer class for Rust call graph analysis
+    """
+    
+    def __init__(self):
+        """Initialize the analyzer"""
+        self._call_graph_dir = None
+    
+    def _get_call_graph_dir(self) -> Path:
+        """Get the call-graph directory"""
+        if self._call_graph_dir is None:
+            current_dir = Path(__file__).parent.parent
+            self._call_graph_dir = current_dir / "call-graph"
+        return self._call_graph_dir
+    
+    def analyze(self, project_path: str, output_dir: Optional[str] = None, 
+                project_name: Optional[str] = None) -> AnalysisResult:
+        """
+        Analyze a Rust project and generate call graph JSON
+        
+        Args:
+            project_path: Path to the Rust project to analyze
+            output_dir: Optional output directory. If None, uses call-graph/output.
+            project_name: Optional project name for output file. If None, uses directory name.
+        
+        Returns:
+            AnalysisResult containing the analysis results
+        """
+        try:
+            # Validate project path
+            if not os.path.exists(project_path):
+                return AnalysisResult(
+                    success=False,
+                    error=f"Project path '{project_path}' does not exist."
+                )
+            
+            # Check if it's a Rust project
+            cargo_toml = os.path.join(project_path, "Cargo.toml")
+            if not os.path.exists(cargo_toml):
+                return AnalysisResult(
+                    success=False,
+                    error=f"'{project_path}' does not appear to be a Rust project (no Cargo.toml found)."
+                )
+            
+            # Determine project name
+            if project_name is None:
+                project_name = os.path.basename(os.path.abspath(project_path))
+            
+            # Use existing call-graph script
+            call_graph_dir = self._get_call_graph_dir()
+            analyze_script = call_graph_dir / "analyze_project.py"
+            
+            if not analyze_script.exists():
+                return AnalysisResult(
+                    success=False,
+                    error=f"analyze_project.py not found at {analyze_script}"
+                )
+            
+            print(f"Running analysis for project: {project_path}")
+            
+            # Run the existing analyze_project.py script
+            analysis_cmd = [sys.executable, str(analyze_script), project_path]
+            analysis_result = subprocess.run(
+                analysis_cmd,
+                capture_output=True,
+                text=True,
+                cwd=call_graph_dir
+            )
+            
+            if analysis_result.returncode != 0:
+                return AnalysisResult(
+                    success=False,
+                    error=f"Analysis failed: {analysis_result.stderr}"
+                )
+            
+            # Find the generated JSON file
+            output_dir_path = call_graph_dir / "output"
+            json_file_pattern = f"{project_name}_call_graph.json"
+            json_output_path = output_dir_path / json_file_pattern
+            
+            if not json_output_path.exists():
+                # Try to find any JSON file in output directory
+                json_files = list(output_dir_path.glob("*_call_graph.json"))
+                if json_files:
+                    json_output_path = json_files[-1]  # Use the most recent one
+                else:
+                    return AnalysisResult(
+                        success=False,
+                        error=f"No JSON output file found in {output_dir_path}"
+                    )
+            
+            # Read the JSON data
+            with open(json_output_path, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+            
+            function_count = len(json_data.get('functions', {}))
+            
+            # Copy to custom output directory if specified
+            final_output_path = str(json_output_path)
+            if output_dir and output_dir != str(output_dir_path):
+                os.makedirs(output_dir, exist_ok=True)
+                custom_output_path = os.path.join(output_dir, json_file_pattern)
+                with open(custom_output_path, 'w', encoding='utf-8') as f:
+                    json.dump(json_data, f, indent=2, ensure_ascii=False)
+                final_output_path = custom_output_path
+            
+            return AnalysisResult(
+                success=True,
+                data=json_data,
+                output_file=final_output_path,
+                function_count=function_count
+            )
+                
+        except Exception as e:
+            return AnalysisResult(
+                success=False,
+                error=f"Analysis failed: {str(e)}"
+            )
+
+
+def analyze_project(project_path: str, output_dir: Optional[str] = None, 
+                   project_name: Optional[str] = None) -> AnalysisResult:
+    """
+    Convenience function to analyze a Rust project
+    
+    Args:
+        project_path: Path to the Rust project to analyze
+        output_dir: Optional output directory
+        project_name: Optional project name for output file
+    
+    Returns:
+        AnalysisResult containing the analysis results
+    
+    Example:
+        >>> from rust_call_graph import analyze_project
+        >>> result = analyze_project("/path/to/rust/project")
+        >>> if result.success:
+        ...     print(f"Analysis completed! Found {result.function_count} functions")
+        ...     print(f"Output saved to: {result.output_file}")
+        ... else:
+        ...     print(f"Analysis failed: {result.error}")
+    """
+    analyzer = RustCallGraphAnalyzer()
+    return analyzer.analyze(project_path, output_dir, project_name)
