@@ -206,6 +206,11 @@ xflags::xflags! {
             /// Include dependencies in analysis.
             optional --with-deps
         }
+
+        cmd struct-analyzer {
+            /// Directory with Cargo.toml or Anchor.toml.
+            required path: PathBuf
+        }
     }
 }
 
@@ -239,6 +244,7 @@ pub enum RustAnalyzerCmd {
     Lsif(Lsif),
     Scip(Scip),
     FunctionAnalyzer(FunctionAnalyzer),
+    StructAnalyzer(StructAnalyzer),
 }
 
 #[derive(Debug)]
@@ -355,11 +361,17 @@ pub struct Scip {
 #[derive(Debug)]
 pub struct FunctionAnalyzer {
     pub path: PathBuf,
+
     pub output: Option<PathBuf>,
     pub disable_build_scripts: bool,
     pub disable_proc_macros: bool,
     pub proc_macro_srv: Option<PathBuf>,
     pub with_deps: bool,
+}
+
+#[derive(Debug)]
+pub struct StructAnalyzer {
+    pub path: PathBuf,
 }
 
 impl RustAnalyzer {

@@ -38,6 +38,7 @@ rustc-hash.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde.workspace = true
 serde_derive.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
 tenthash = "1.1.0"
 num_cpus = "1.17.0"
 mimalloc = { version = "0.1.46", default-features = false, optional = true }

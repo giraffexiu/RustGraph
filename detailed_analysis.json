@@ -1,0 +1,26 @@
+{
+  "project_info": {
+    "name": "mango-v3",
+    "anchor_version": null,
+    "program_id": null,
+    "analysis_timestamp": "2025-09-26T07:01:56.523171Z",
+    "rust_version": "1.88"
+  },
+  "account_structs": [],
+  "pda_relationships": [],
+  "constraint_summary": {
+    "total_constraints": 0,
+    "constraint_types": {},
+    "pda_count": 0,
+    "init_accounts": 0,
+    "mutable_accounts": 0
+  },
+  "statistics": {
+    "total_structs": 1260,
+    "anchor_structs": 0,
+    "total_fields": 0,
+    "pda_fields": 0,
+    "files_analyzed": 0,
+    "analysis_duration_ms": 4967
+  }
+}

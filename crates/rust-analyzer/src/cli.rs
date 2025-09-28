@@ -4,6 +4,7 @@
 
 mod analysis_stats;
 mod function_analyzer;
+mod struct_analyzer;
 mod diagnostics;
 pub mod flags;
 mod highlight;
