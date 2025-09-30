@@ -8,10 +8,11 @@
 
 ### Overview
 
-RustGraph is a comprehensive static analysis toolkit for Rust projects, specifically optimized for Solana/Anchor blockchain development. It provides two powerful tools:
+RustGraph is a comprehensive static analysis toolkit for Rust projects, specifically optimized for Solana/Anchor blockchain development. It provides three powerful tools:
 
 1. **Function Call Analyzer**: Extracts and analyzes function call relationships using rust-analyzer
-2. **Solana Structure Extractor**: Extracts complete contract structures for AI vulnerability analysis
+2. **Symbol Finder**: Finds and extracts specific symbol definitions (functions, structs) with detailed content
+3. **Solana Structure Extractor**: Extracts complete contract structures for AI vulnerability analysis
 
 ### Key Features
 
@@ -21,6 +22,13 @@ RustGraph is a comprehensive static analysis toolkit for Rust projects, specific
 - **🎯 Smart Filtering**: Intelligently filters out external dependencies to focus on your project code
 - **📝 Detailed Output**: Generates human-readable text reports with file paths and line numbers
 - **⚡ Fast Analysis**: Built on rust-analyzer's powerful semantic analysis engine
+
+#### Symbol Finder
+- **🔎 Precise Symbol Search**: Find specific functions or structs by name across your project
+- **📋 Complete Content Extraction**: Extracts full source code, documentation, and metadata
+- **🎯 Type-Aware Search**: Supports targeted search by symbol type (function, struct)
+- **📄 Multiple Output Formats**: Supports both human-readable text and structured JSON output
+- **🚀 Single File & Project Mode**: Works with individual files or entire project workspaces
 
 #### Solana Structure Extractor
 - **🏗️ Complete Structure Extraction**: Extracts complete struct definitions with all fields and constraints
@@ -41,7 +49,17 @@ Leverages rust-analyzer's semantic analysis capabilities to:
 4. **Filter Results**: Removes external library calls to focus on project-internal relationships
 5. **Generate Report**: Outputs detailed call relationship information
 
-#### 2. Solana Structure Extractor
+#### 2. Symbol Finder
+
+Provides precise symbol search and extraction capabilities:
+
+1. **Symbol Discovery**: Uses rust-analyzer's semantic analysis to find symbols by name and type
+2. **Content Extraction**: Extracts complete source code, including documentation comments
+3. **Metadata Collection**: Gathers symbol location, container information, and descriptions
+4. **Format Output**: Supports both human-readable text and structured JSON formats
+5. **Flexible Scope**: Works with single files or entire project workspaces
+
+#### 3. Solana Structure Extractor
 
 Specialized tool for Solana/Anchor projects that:
 
@@ -87,6 +105,26 @@ cargo build --release
 ./target/release/rust-analyzer function-analyzer /path/to/project --output call_graph.txt
 ```
 
+#### Symbol Finder
+
+```bash
+# Find a specific function
+./target/release/rust-analyzer symbol-finder function my_function_name
+
+# Find a specific struct
+./target/release/rust-analyzer symbol-finder struct MyStruct
+
+# Search in specific project path
+./target/release/rust-analyzer symbol-finder function initialize --project-path /path/to/project
+
+# Output to file in JSON format
+./target/release/rust-analyzer symbol-finder function process_instruction \
+    --output-path symbols.json --output-format json
+
+# Search in single file
+./target/release/rust-analyzer symbol-finder struct Config --project-path ./src/lib.rs
+```
+
 #### Solana Structure Extractor
 
 ```bash
@@ -111,6 +149,49 @@ python3 call-graph/solana_extractor_v3.py ./2025-01-pump-science --output output
 src/lib.rs:15:initialize -> src/config.rs:23:load_config (call at 18:5)
 src/lib.rs:15:initialize -> src/utils.rs:45:setup_logging (call at 19:5)
 src/processor.rs:67:process_instruction -> src/state.rs:34:update_state (call at 72:9)
+```
+
+#### Symbol Finder Output
+
+**Text Format:**
+```
+Symbol: initialize
+Type: function
+File: src/lib.rs
+Range: 15:0-25:1
+Container: None
+Description: Initializes the program state
+
+Source Code:
+pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+    let global = &mut ctx.accounts.global;
+    global.initialized = true;
+    global.authority = ctx.accounts.authority.key();
+    Ok(())
+}
+
+Documentation:
+/// Initializes the program with default settings
+/// 
+/// # Arguments
+/// * `ctx` - The initialization context
+```
+
+**JSON Format:**
+```json
+{
+  "symbol": {
+    "name": "initialize",
+    "kind": "function",
+    "file_path": "src/lib.rs",
+    "full_range": [15, 25],
+    "focus_range": [15, 25],
+    "container_name": null,
+    "description": "Initializes the program state"
+  },
+  "source_code": "pub fn initialize(ctx: Context<Initialize>) -> Result<()> { ... }",
+  "documentation": "/// Initializes the program with default settings"
+}
 ```
 
 #### Solana Structure Extractor Output
@@ -151,6 +232,13 @@ pub struct Global {
 - **Refactoring Support**: Safely refactor by understanding call relationships
 - **Security Auditing**: Trace execution paths in Solana/Anchor programs
 
+#### Symbol Finder
+- **Code Navigation**: Quickly locate and examine specific functions or structs
+- **Documentation Generation**: Extract symbol definitions with documentation for API docs
+- **Code Analysis**: Analyze specific symbols for security auditing or code review
+- **IDE Integration**: Provide symbol information for development tools
+- **Automated Processing**: Extract symbol data in JSON format for further analysis
+
 #### Solana Structure Extractor
 - **AI Vulnerability Scanning**: Provide complete context for AI-based security analysis
 - **Security Auditing**: Extract all contract structures for manual review
@@ -175,6 +263,13 @@ The Solana Structure Extractor includes specialized support for:
 - **Path Filter**: Intelligently filters external dependencies
 - **Report Generator**: Formats output with relative paths and readable format
 
+#### Symbol Finder Components
+- **Symbol Search Engine**: Uses rust-analyzer's semantic analysis for precise symbol discovery
+- **Content Extractor**: Extracts complete source code and documentation from symbols
+- **Metadata Collector**: Gathers location, container, and description information
+- **Format Processor**: Supports multiple output formats (text, JSON) with structured data
+- **Scope Manager**: Handles both single-file and project-wide analysis modes
+
 #### Solana Structure Extractor Components
 - **Structure Parser**: Robust bracket matching algorithm for complete extraction
 - **Constraint Analyzer**: Extracts account constraints and validation logic
@@ -187,6 +282,12 @@ The Solana Structure Extractor includes specialized support for:
 - Only analyzes static function calls (no dynamic dispatch analysis)
 - Requires valid Rust project with `Cargo.toml`
 - Large projects may take time to analyze
+
+#### Symbol Finder
+- Requires valid Rust project structure for project-wide analysis
+- Symbol search is case-sensitive and requires exact name matching
+- Documentation extraction depends on source code comments format
+- Large projects may have longer search times
 
 #### Solana Structure Extractor
 - Optimized for Anchor framework projects

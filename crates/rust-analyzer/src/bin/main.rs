@@ -87,6 +87,7 @@ fn actual_main() -> anyhow::Result<ExitCode> {
         }
         flags::RustAnalyzerCmd::Scip(cmd) => cmd.run()?,
         flags::RustAnalyzerCmd::FunctionAnalyzer(cmd) => cmd.run()?,
+        flags::RustAnalyzerCmd::SymbolFinder(cmd) => cmd.run()?,
         flags::RustAnalyzerCmd::RunTests(cmd) => cmd.run()?,
         flags::RustAnalyzerCmd::RustcTests(cmd) => cmd.run()?,
         flags::RustAnalyzerCmd::PrimeCaches(cmd) => cmd.run()?,
