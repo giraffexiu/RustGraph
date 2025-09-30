@@ -435,8 +435,6 @@ impl flags::SymbolFinder {
     }
     
     fn output_result<T: serde::Serialize>(&self, content: &T) -> Result<()> {
-        let output_format = self.output_format.as_deref().unwrap_or("text");
-        
         let output: Box<dyn Write> = match &self.output_path {
             Some(path) => {
                 let file = fs::File::create(path)?;
@@ -447,57 +445,22 @@ impl flags::SymbolFinder {
         
         let mut writer = output;
         
-        match output_format {
-            "json" => {
-                let json = serde_json::to_string_pretty(content)?;
-                writeln!(writer, "{}", json)?;
-            }
-            "text" | _ => {
-                // 默认文本格式输出
-                match serde_json::to_value(content)? {
-                    serde_json::Value::Object(map) => {
-                        self.write_text_format(&mut writer, &map, 0)?;
-                    }
-                    _ => {
-                        writeln!(writer, "{}", serde_json::to_string_pretty(content)?)?;
-                    }
-                }
-            }
-        }
-        
-        Ok(())
-    }
-    
-    fn write_text_format(&self, writer: &mut dyn Write, obj: &serde_json::Map<String, serde_json::Value>, indent: usize) -> Result<()> {
-        let indent_str = "  ".repeat(indent);
-        
-        for (key, value) in obj {
-            match value {
-                serde_json::Value::String(s) => {
-                    writeln!(writer, "{}{}: {}", indent_str, key, s)?;
-                }
-                serde_json::Value::Object(nested) => {
-                    writeln!(writer, "{}{}:", indent_str, key)?;
-                    self.write_text_format(writer, nested, indent + 1)?;
-                }
-                serde_json::Value::Array(arr) => {
-                    writeln!(writer, "{}{}:", indent_str, key)?;
-                    for (i, item) in arr.iter().enumerate() {
-                        match item {
-                            serde_json::Value::Object(nested) => {
-                                writeln!(writer, "{}  [{}]:", indent_str, i)?;
-                                self.write_text_format(writer, nested, indent + 2)?;
-                            }
-                            _ => {
-                                writeln!(writer, "{}  [{}]: {}", indent_str, i, item)?;
-                            }
+        // Only output source code
+        match serde_json::to_value(content)? {
+            serde_json::Value::Object(map) => {
+                if let Some(base) = map.get("base") {
+                    if let Some(source_code) = base.get("source_code") {
+                        if let Some(code_str) = source_code.as_str() {
+                            writeln!(writer, "{}", code_str)?;
                         }
                     }
-                }
-                _ => {
-                    writeln!(writer, "{}{}: {}", indent_str, key, value)?;
+                } else if let Some(source_code) = map.get("source_code") {
+                    if let Some(code_str) = source_code.as_str() {
+                        writeln!(writer, "{}", code_str)?;
+                    }
                 }
             }
+            _ => {}
         }
         
         Ok(())
