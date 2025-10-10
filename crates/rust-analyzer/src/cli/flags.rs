@@ -207,31 +207,14 @@ xflags::xflags! {
             optional --with-deps
         }
 
-        /// Find and extract symbol definitions (functions, structs, etc.).
-        cmd symbol-finder {
-            /// Type of symbol to find (function, struct).
-            required symbol_type: String
+        
 
-            /// Name of the symbol to find.
+        cmd source-finder {
+            /// Function or symbol name to search for (supports fuzzy matching).
             required symbol_name: String
 
-            /// Path to the Rust project or source file.
-            optional --project-path project_path: PathBuf
-
-            /// Output file for symbol content.
-            optional --output-path output_path: PathBuf
-
-            /// Output format (text, json).
-            optional --output-format output_format: String
-
-            /// Disable build script running.
-            optional --disable-build-scripts
-
-            /// Disable proc-macro expansion.
-            optional --disable-proc-macros
-
-            /// Path to the proc-macro server.
-            optional --proc-macro-srv path: PathBuf
+            /// Path to the project root directory.
+            required project_path: PathBuf
         }
     }
 }
@@ -266,7 +249,7 @@ pub enum RustAnalyzerCmd {
     Lsif(Lsif),
     Scip(Scip),
     FunctionAnalyzer(FunctionAnalyzer),
-    SymbolFinder(SymbolFinder),
+    SourceFinder(SourceFinder),
 }
 
 #[derive(Debug)]
@@ -390,16 +373,11 @@ pub struct FunctionAnalyzer {
     pub with_deps: bool,
 }
 
+
 #[derive(Debug)]
-pub struct SymbolFinder {
-    pub symbol_type: String,
+pub struct SourceFinder {
     pub symbol_name: String,
-    pub project_path: Option<PathBuf>,
-    pub output_path: Option<PathBuf>,
-    pub output_format: Option<String>,
-    pub disable_build_scripts: bool,
-    pub disable_proc_macros: bool,
-    pub proc_macro_srv: Option<PathBuf>,
+    pub project_path: PathBuf,
 }
 
 impl RustAnalyzer {

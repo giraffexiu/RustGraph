@@ -19,7 +19,7 @@ from enum import Enum
 
 class AnalyzerType(Enum):
     """Analyzer type enumeration"""
-    SYMBOL_FINDER = "symbol_finder"
+    SOURCE_FINDER = "source_finder"
     STRUCT_ANALYZER = "struct_analyzer"
     CALL_GRAPH = "call_graph"
 
@@ -39,14 +39,8 @@ class AnalysisConfig:
     output_format: OutputFormat = OutputFormat.JSON
     output_path: Optional[str] = None
     
-    # Symbol finder specific config
-    symbol_type: Optional[str] = None
+    # Source finder specific config
     symbol_name: Optional[str] = None
-    
-    # General config
-    disable_build_scripts: bool = False
-    disable_proc_macros: bool = False
-    proc_macro_srv: Optional[str] = None
     
     # Output config
     auto_generate_output_path: bool = True
@@ -159,28 +153,28 @@ class BaseAnalyzer(ABC):
         return str(output_dir / filename)
 
 
-class SymbolFinderAnalyzer(BaseAnalyzer):
-    """Symbol finder analyzer"""
+class SourceFinderAnalyzer(BaseAnalyzer):
+    """Source finder analyzer"""
     
     def analyze(self) -> AnalysisResult:
-        """Execute symbol finder analysis"""
+        """Execute source finder analysis"""
         import time
         start_time = time.time()
         
         if not self._validate_project_path():
             return AnalysisResult(
                 success=False,
-                analyzer_type=AnalyzerType.SYMBOL_FINDER,
+                analyzer_type=AnalyzerType.SOURCE_FINDER,
                 config=self.config,
                 error_message=f"Invalid project path: {self.config.project_path}"
             )
         
-        if not self.config.symbol_type or not self.config.symbol_name:
+        if not self.config.symbol_name:
             return AnalysisResult(
                 success=False,
-                analyzer_type=AnalyzerType.SYMBOL_FINDER,
+                analyzer_type=AnalyzerType.SOURCE_FINDER,
                 config=self.config,
-                error_message="Symbol finder requires symbol_type and symbol_name"
+                error_message="Source finder requires symbol_name"
             )
         
         try:
@@ -191,39 +185,29 @@ class SymbolFinderAnalyzer(BaseAnalyzer):
             
             cmd = [
                 str(binary_path),
-                "symbol-finder",
-                self.config.symbol_type,
+                "source-finder",
                 self.config.symbol_name,
-                "--project-path", self.config.project_path
+                self.config.project_path
             ]
-            
-            if self.config.disable_build_scripts:
-                cmd.append("--disable-build-scripts")
-            
-            if self.config.disable_proc_macros:
-                cmd.append("--disable-proc-macros")
-            
-            if self.config.proc_macro_srv:
-                cmd.extend(["--proc-macro-srv", self.config.proc_macro_srv])
             
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.returncode != 0:
                 return AnalysisResult(
                     success=False,
-                    analyzer_type=AnalyzerType.SYMBOL_FINDER,
+                    analyzer_type=AnalyzerType.SOURCE_FINDER,
                     config=self.config,
-                    error_message=f"Symbol search failed: {result.stderr}",
+                    error_message=f"Source search failed: {result.stderr}",
                     execution_time=time.time() - start_time
                 )
             
-            # Return source code directly
+            # Return source code directly without any wrapper
             source_code = result.stdout.strip() if result.stdout else ""
             data = {"source_code": source_code}
             
             return AnalysisResult(
                 success=True,
-                analyzer_type=AnalyzerType.SYMBOL_FINDER,
+                analyzer_type=AnalyzerType.SOURCE_FINDER,
                 config=self.config,
                 data=data,
                 output_path=None,
@@ -233,9 +217,9 @@ class SymbolFinderAnalyzer(BaseAnalyzer):
         except Exception as e:
             return AnalysisResult(
                 success=False,
-                analyzer_type=AnalyzerType.SYMBOL_FINDER,
+                analyzer_type=AnalyzerType.SOURCE_FINDER,
                 config=self.config,
-                error_message=f"Error during symbol search: {e}",
+                error_message=f"Error during source search: {e}",
                 execution_time=time.time() - start_time
             )
     
@@ -484,8 +468,8 @@ class AnalyzerFactory:
     @staticmethod
     def create_analyzer(config: AnalysisConfig) -> BaseAnalyzer:
         """Create analyzer based on config"""
-        if config.analyzer_type == AnalyzerType.SYMBOL_FINDER:
-            return SymbolFinderAnalyzer(config)
+        if config.analyzer_type == AnalyzerType.SOURCE_FINDER:
+            return SourceFinderAnalyzer(config)
         elif config.analyzer_type == AnalyzerType.STRUCT_ANALYZER:
             return StructAnalyzer(config)
         elif config.analyzer_type == AnalyzerType.CALL_GRAPH:
@@ -506,9 +490,8 @@ class RustProjectAnalyzer:
             analyzer = AnalyzerFactory.create_analyzer(config)
             result = analyzer.analyze()
             
-            # Only handle output for non-struct-analyzer
-            # struct-analyzer already outputs .rs file via export_to_rust_file()
-            if result.success and self.output_handler and config.analyzer_type != AnalyzerType.STRUCT_ANALYZER:
+            # Handle output for all analyzer types
+            if result.success and self.output_handler:
                 self.output_handler.handle_output(result)
             
             return result
@@ -527,13 +510,12 @@ class RustProjectAnalyzer:
 
 
 # Convenience functions for programmatic use
-def analyze_symbols(project_path: str, symbol_type: str, symbol_name: str, 
+def analyze_source(project_path: str, symbol_name: str,
                    output_path: Optional[str] = None, **kwargs) -> AnalysisResult:
-    """Symbol analysis convenience function"""
+    """Source analysis convenience function"""
     config = AnalysisConfig(
         project_path=project_path,
-        analyzer_type=AnalyzerType.SYMBOL_FINDER,
-        symbol_type=symbol_type,
+        analyzer_type=AnalyzerType.SOURCE_FINDER,
         symbol_name=symbol_name,
         output_path=output_path,
         **kwargs

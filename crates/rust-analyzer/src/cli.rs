@@ -13,8 +13,8 @@ mod prime_caches;
 mod run_tests;
 mod rustc_tests;
 mod scip;
+mod source_finder;
 mod ssr;
-mod symbol_finder;
 mod symbols;
 mod unresolved_references;
 
