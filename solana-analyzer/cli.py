@@ -102,13 +102,9 @@ def create_config_from_args(args) -> AnalysisConfig:
 def print_result_summary(result):
     """Print result summary"""
     if result.success:
-        # For source finder, output results directly without any additional info
+        # For source finder, output JSON results directly
         if result.analyzer_type == AnalyzerType.SOURCE_FINDER and result.data:
-            source_code = result.data.get("source_code", "")
-            if source_code:
-                print(source_code)
-            else:
-                print("No source code found")
+            print(json.dumps(result.data, indent=2, ensure_ascii=False))
         else:
             print("✓ Analysis completed")
             print(f"  Analyzer: {result.analyzer_type.value}")

@@ -201,9 +201,9 @@ class SourceFinderAnalyzer(BaseAnalyzer):
                     execution_time=time.time() - start_time
                 )
             
-            # Return source code directly without any wrapper
-            source_code = result.stdout.strip() if result.stdout else ""
-            data = {"source_code": source_code}
+            # Parse the enhanced output format with call graph information
+            output_text = result.stdout.strip() if result.stdout else ""
+            data = self._parse_source_finder_output(output_text)
             
             return AnalysisResult(
                 success=True,
@@ -236,6 +236,274 @@ class SourceFinderAnalyzer(BaseAnalyzer):
         
         if build_result.returncode != 0:
             raise Exception(f"Failed to build rust-analyzer: {build_result.stderr}")
+    
+    def _parse_source_finder_output(self, output_text: str) -> Dict[str, Any]:
+        """Parse the enhanced source finder output with call graph information"""
+        if not output_text:
+            return {}
+        
+        lines = output_text.split('\n')
+        i = 0
+        
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            if line.startswith("File Path:"):
+                file_path = line.replace("File Path:", "").strip()
+                
+                # Extract contract name from file path
+                contract_name = self._extract_contract_name(file_path)
+                
+                # Read start line and end line
+                start_line = 1
+                end_line = 1
+                
+                i += 1
+                if i < len(lines) and lines[i].strip().startswith("Start Line:"):
+                    start_line = int(lines[i].replace("Start Line:", "").strip())
+                    i += 1
+                
+                if i < len(lines) and lines[i].strip().startswith("End Line:"):
+                    end_line = int(lines[i].replace("End Line:", "").strip())
+                    i += 1
+                
+                # Read source code
+                source_code = ""
+                function_calls = []
+                
+                if i < len(lines) and lines[i].strip() == "Source Code:":
+                    i += 1
+                    source_lines = []
+                    
+                    while i < len(lines):
+                        line = lines[i]
+                        if line.strip() == "Function Calls:" or line.strip().startswith("Function Calls:"):
+                            break
+                        if line.strip() == "" and i + 1 < len(lines) and lines[i + 1].strip().startswith("File Path:"):
+                            break
+                        source_lines.append(line)
+                        i += 1
+                    
+                    source_code = '\n'.join(source_lines).strip()
+                
+                # Parse function calls
+                if i < len(lines) and lines[i].strip().startswith("Function Calls:"):
+                    line = lines[i].strip()
+                    if "None" not in line:
+                        i += 1
+                        while i < len(lines):
+                            line = lines[i].strip()
+                            if line.startswith("->"):
+                                call_info = line.replace("->", "").strip()
+                                if ":" in call_info:
+                                    parts = call_info.rsplit(":", 2)
+                                    if len(parts) >= 3:
+                                        call_file_path = parts[0]
+                                        call_func_name = parts[2]
+                                        call_module = self._extract_contract_name(call_file_path)
+                                        
+                                        function_calls.append({
+                                            "file": call_file_path,
+                                            "functiion": call_func_name,  # Keep the typo as requested
+                                            "module": call_module
+                                        })
+                            elif line == "" and i + 1 < len(lines) and lines[i + 1].strip().startswith("File Path:"):
+                                break
+                            elif line.startswith("File Path:"):
+                                i -= 1
+                                break
+                            i += 1
+                
+                # Extract function name and parameters from source code
+                function_name, parameters, _, _ = self._extract_function_info(source_code)
+                
+                # Return the first found function in the specified format
+                return {
+                    "contract": contract_name,
+                    "function": function_name,
+                    "source": source_code,
+                    "location": {
+                        "file": file_path,
+                        "start_line": start_line,
+                        "end_line": end_line
+                    },
+                    "parameter": parameters,
+                    "calls": function_calls
+                }
+            
+            i += 1
+        
+        return {}
+    
+    def _extract_contract_name(self, file_path: str) -> str:
+        """Extract contract name from file path"""
+        import os
+        filename = os.path.basename(file_path)
+        name_without_ext = os.path.splitext(filename)[0]
+        return name_without_ext
+    
+    def _extract_function_info(self, source_code: str, file_path: str = "") -> tuple:
+        """Extract function name, parameters, start and end line from source code"""
+        if not source_code:
+            return "", [], 1, 1
+        
+        lines = source_code.split('\n')
+        function_name = ""
+        parameters = []
+        start_line = 1
+        end_line = len(lines)
+        
+        # Look for function definition
+        for i, line in enumerate(lines):
+            stripped_line = line.strip()
+            if stripped_line.startswith("fn ") or stripped_line.startswith("pub fn "):
+                # Parse Rust function
+                function_name, parameters = self._parse_rust_function(stripped_line)
+                start_line = i + 1
+                break
+            elif "function " in stripped_line:
+                # Parse Solidity-like function (if any)
+                function_name, parameters = self._parse_solidity_function(stripped_line)
+                start_line = i + 1
+                break
+        
+        if not function_name:
+            # Fallback: try to extract any identifier
+            for line in lines:
+                stripped_line = line.strip()
+                if stripped_line and not stripped_line.startswith("//") and not stripped_line.startswith("/*"):
+                    # Try to find function-like patterns
+                    import re
+                    match = re.search(r'(\w+)\s*\(', stripped_line)
+                    if match:
+                        function_name = match.group(1)
+                        break
+        
+        # Calculate actual line numbers by finding the source code in the original file
+        if file_path and source_code.strip():
+            actual_start, actual_end = self._find_source_location_in_file(source_code, file_path)
+            if actual_start > 0:
+                start_line = actual_start
+                end_line = actual_end
+        
+        return function_name, parameters, start_line, end_line
+    
+    def _find_source_location_in_file(self, source_code: str, file_path: str) -> tuple:
+        """Find the actual start and end line numbers of source code in the original file"""
+        try:
+            # Read the original file
+            with open(file_path, 'r', encoding='utf-8') as f:
+                file_lines = f.readlines()
+            
+            # Clean up source code lines for comparison
+            source_lines = [line.rstrip() for line in source_code.split('\n') if line.strip()]
+            if not source_lines:
+                return 1, 1
+            
+            # Find the first line of source code in the file
+            first_source_line = source_lines[0].strip()
+            
+            for i, file_line in enumerate(file_lines):
+                if file_line.strip() == first_source_line:
+                    # Found potential start, now verify the following lines match
+                    start_line = i + 1  # Convert to 1-based indexing
+                    match_count = 0
+                    
+                    for j, source_line in enumerate(source_lines):
+                        if i + j < len(file_lines):
+                            if file_lines[i + j].strip() == source_line.strip():
+                                match_count += 1
+                            else:
+                                break
+                        else:
+                            break
+                    
+                    # If we matched all source lines, we found the location
+                    if match_count == len(source_lines):
+                        end_line = start_line + len(source_lines) - 1
+                        return start_line, end_line
+            
+            # If exact match not found, return default
+            return 1, len(source_lines)
+            
+        except Exception as e:
+            # If file reading fails, return default
+            return 1, len(source_code.split('\n'))
+    
+    def _parse_rust_function(self, line: str) -> tuple:
+        """Parse Rust function definition"""
+        import re
+        
+        # Extract function name
+        fn_match = re.search(r'fn\s+(\w+)', line)
+        function_name = fn_match.group(1) if fn_match else ""
+        
+        # Extract parameters
+        parameters = []
+        param_match = re.search(r'\((.*?)\)', line)
+        if param_match:
+            param_str = param_match.group(1).strip()
+            if param_str and param_str != "&self" and param_str != "self":
+                # Split parameters by comma
+                param_parts = param_str.split(',')
+                for param in param_parts:
+                    param = param.strip()
+                    if param and param != "&self" and param != "self":
+                        # Parse "name: type" format
+                        if ':' in param:
+                            name_part, type_part = param.split(':', 1)
+                            param_name = name_part.strip()
+                            param_type = type_part.strip()
+                            parameters.append({
+                                "name": param_name,
+                                "type": param_type
+                            })
+        
+        # Format function signature
+        if parameters:
+            param_types = [p["type"] for p in parameters]
+            function_signature = f"{function_name}({','.join(param_types)})"
+        else:
+            function_signature = f"{function_name}()"
+        
+        return function_signature, parameters
+    
+    def _parse_solidity_function(self, line: str) -> tuple:
+        """Parse Solidity function definition"""
+        import re
+        
+        # Extract function name
+        fn_match = re.search(r'function\s+(\w+)', line)
+        function_name = fn_match.group(1) if fn_match else ""
+        
+        # Extract parameters
+        parameters = []
+        param_match = re.search(r'\((.*?)\)', line)
+        if param_match:
+            param_str = param_match.group(1).strip()
+            if param_str:
+                param_parts = param_str.split(',')
+                for param in param_parts:
+                    param = param.strip()
+                    if param:
+                        # Parse "type name" format
+                        parts = param.split()
+                        if len(parts) >= 2:
+                            param_type = parts[0]
+                            param_name = parts[1]
+                            parameters.append({
+                                "name": param_name,
+                                "type": param_type
+                            })
+        
+        # Format function signature
+        if parameters:
+            param_types = [p["type"] for p in parameters]
+            function_signature = f"{function_name}({','.join(param_types)})"
+        else:
+            function_signature = f"{function_name}()"
+        
+        return function_signature, parameters
 
 
 class StructAnalyzer(BaseAnalyzer):
