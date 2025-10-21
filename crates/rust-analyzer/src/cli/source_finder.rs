@@ -1,10 +1,4 @@
-//! Source code finder based on symbol search.
-//! 
-//! This module provides functionality to search for symbols (functions, structs, etc.)
-//! in a Rust project and return their source code with call graph information.
-
 use std::env;
-
 use anyhow::{Context, Result};
 use hir::{Crate, ModuleDef, Semantics};
 use ide::{Analysis, AnalysisHost, CallHierarchyConfig, CallItem, FilePosition, LineCol};
@@ -15,11 +9,43 @@ use ide_db::{
 };
 use load_cargo::{load_workspace, LoadCargoConfig, ProcMacroServerChoice};
 use project_model::{CargoConfig, ProjectManifest, ProjectWorkspace, RustLibSource};
-
+use serde::{Deserialize, Serialize};
 use syntax::AstNode;
 use vfs::{AbsPathBuf, Vfs};
-
 use crate::cli::flags;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Location {
+    file: String,
+    start_line: u32,
+    end_line: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Parameter {
+    name: String,
+    #[serde(rename = "type")]
+    param_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FunctionCall {
+    file: String,
+    #[serde(rename = "function")]
+    function_name: String,
+    module: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SymbolResult {
+    contract: String,
+    #[serde(rename = "function")]
+    function_name: String,
+    source: String,
+    location: Location,
+    parameter: Vec<Parameter>,
+    calls: Vec<FunctionCall>,
+}
 
 #[derive(Debug, Clone)]
 struct FunctionInfo {
@@ -27,11 +53,6 @@ struct FunctionInfo {
     file_path: String,
     line: u32,
     column: u32,
-}
-
-#[derive(Debug, Clone)]
-struct CallRelation {
-    callee: FunctionInfo,
 }
 
 impl flags::SourceFinder {
@@ -63,69 +84,73 @@ impl flags::SourceFinder {
         // Get project root path
         let project_root = AbsPathBuf::assert_utf8(env::current_dir()?.join(&self.project_path));
         
-        // Search for symbols
-        let results = self.search_symbols(&analysis, &vfs, &project_root)?;
+        // Search for symbols and build JSON result
+        let symbols = self.search_symbols_json(&analysis, &vfs, &db, &project_root)?;
         
-        if results.is_empty() {
-            eprintln!("No symbols found matching '{}'", self.symbol_name);
-            return Ok(());
-        }
-        
-        // For each found symbol, get call graph information if it's a function
-        for (symbol_name, file_path, source_code, start_line, end_line) in &results {
-            println!("File Path: {}", file_path);
-            println!("Start Line: {}", start_line);
-            println!("End Line: {}", end_line);
-            println!("Source Code:");
-            println!("{}", source_code);
-            
-            // Try to get call graph information for functions
-            if let Some(calls) = self.get_function_calls(&analysis, symbol_name, file_path, &vfs, &db, &project_root)? {
-                if !calls.is_empty() {
-                    println!("Function Calls:");
-                    for call in calls {
-                        println!("  -> {}:{}:{}", 
-                            self.convert_to_relative_path(&call.callee.file_path, &project_root),
-                            call.callee.line,
-                            call.callee.name
-                        );
-                    }
-                } else {
-                    println!("Function Calls: None");
-                }
-            }
-            
-            println!();
+        // Output JSON - each symbol as a separate JSON object
+        for symbol in symbols {
+            let json_output = serde_json::to_string_pretty(&symbol)?;
+            println!("{}", json_output);
         }
         
         Ok(())
     }
     
-    fn search_symbols(&self, analysis: &Analysis, vfs: &Vfs, project_root: &AbsPathBuf) -> Result<Vec<(String, String, String, u32, u32)>> {
+    fn search_symbols_json(
+        &self, 
+        analysis: &Analysis, 
+        vfs: &Vfs, 
+        db: &ide::RootDatabase,
+        project_root: &AbsPathBuf
+    ) -> Result<Vec<SymbolResult>> {
         let mut query = Query::new(self.symbol_name.clone());
         query.fuzzy(); // Enable fuzzy matching
         
         let search_results = analysis.symbol_search(query, 50)
             .map_err(|_| anyhow::anyhow!("Symbol search was cancelled"))?;
         
-        let mut results = Vec::new();
+        let mut symbols = Vec::new();
         
         for nav_target in search_results {
             // Get the source code for this symbol
             if let Ok(source_text) = analysis.file_text(nav_target.file_id) {
                 let (source_code, start_line, end_line) = self.extract_symbol_source(&source_text, &nav_target);
                 let file_path = self.get_file_path(vfs, nav_target.file_id, project_root);
-                results.push((
-                    nav_target.name.to_string(),
-                    file_path,
-                    source_code,
-                    start_line,
-                    end_line,
-                ));
+                
+                // Get function calls if this is a function
+                let function_calls = self.get_function_calls_json(
+                    analysis, 
+                    &nav_target.name.to_string(), 
+                    &file_path, 
+                    vfs, 
+                    db, 
+                    project_root
+                ).unwrap_or_default();
+                
+                // Extract contract name from file path
+                let contract_name = self.extract_file_name(&file_path);
+                
+                // Extract parameters (for now, empty - would need more sophisticated parsing)
+                let parameters = Vec::new();
+                
+                let symbol_result = SymbolResult {
+                    contract: contract_name,
+                    function_name: nav_target.name.to_string(),
+                    source: source_code,
+                    location: Location {
+                        file: file_path,
+                        start_line,
+                        end_line,
+                    },
+                    parameter: parameters,
+                    calls: function_calls,
+                };
+                
+                symbols.push(symbol_result);
             }
         }
         
-        Ok(results)
+        Ok(symbols)
     }
     
     fn extract_symbol_source(&self, source_text: &str, nav_target: &ide::NavigationTarget) -> (String, u32, u32) {
@@ -140,9 +165,6 @@ impl flags::SourceFinder {
         if start_offset >= end_offset {
             return (String::new(), 0, 0);
         }
-        
-        // Extract the exact range of the symbol
-        let symbol_text = &source_text[start_offset..end_offset];
         
         // Try to include complete lines for better readability
         let lines: Vec<&str> = source_text.lines().collect();
@@ -174,6 +196,7 @@ impl flags::SourceFinder {
             (source_code, (start_line + 1) as u32, end_line as u32)
         } else {
             // Fallback to exact byte range if line calculation fails
+            let symbol_text = &source_text[start_offset..end_offset];
             (symbol_text.to_string(), 1, 1)
         }
     }
@@ -193,8 +216,8 @@ impl flags::SourceFinder {
         vfs_path.to_string()
     }
     
-    /// Get function calls for a specific function
-    fn get_function_calls(
+    /// Get function calls for a specific function and return as JSON-compatible structure
+    fn get_function_calls_json(
         &self,
         analysis: &Analysis,
         symbol_name: &str,
@@ -202,17 +225,16 @@ impl flags::SourceFinder {
         vfs: &Vfs,
         db: &ide::RootDatabase,
         project_root: &AbsPathBuf,
-    ) -> Result<Option<Vec<CallRelation>>> {
+    ) -> Result<Vec<FunctionCall>> {
         // Find the file_id for this function
         if let Some(file_id) = self.find_file_id_by_path(vfs, file_path) {
             // Try to find the function in the file
-            if let Some(func_info) = self.find_function_in_file(db, vfs, file_id, symbol_name, project_root)? {
+            if let Some(func_info) = self.find_function_in_file(db, vfs, file_id, symbol_name)? {
                 // Get call relationships for this function
-                let calls = self.analyze_function_calls(analysis, &func_info, vfs, db, project_root)?;
-                return Ok(Some(calls));
+                return self.analyze_function_calls_json(analysis, &func_info, vfs, db, project_root);
             }
         }
-        Ok(None)
+        Ok(Vec::new())
     }
     
     /// Find file_id by path
@@ -244,14 +266,13 @@ impl flags::SourceFinder {
         vfs: &Vfs,
         file_id: vfs::FileId,
         function_name: &str,
-        project_root: &AbsPathBuf,
     ) -> Result<Option<FunctionInfo>> {
         // Get all crates and search for the function
         let crates = Crate::all(db);
         
         for krate in crates {
             let root_module = krate.root_module();
-            if let Some(func_info) = self.search_function_in_module(db, vfs, root_module, function_name, file_id, project_root)? {
+            if let Some(func_info) = self.search_function_in_module(db, vfs, root_module, function_name, file_id)? {
                 return Ok(Some(func_info));
             }
         }
@@ -267,7 +288,6 @@ impl flags::SourceFinder {
         module: hir::Module,
         function_name: &str,
         target_file_id: vfs::FileId,
-        project_root: &AbsPathBuf,
     ) -> Result<Option<FunctionInfo>> {
         // Check functions in this module
         for decl in module.declarations(db) {
@@ -305,7 +325,7 @@ impl flags::SourceFinder {
         
         // Recursively search child modules
         for child in module.children(db) {
-            if let Some(func_info) = self.search_function_in_module(db, vfs, child, function_name, target_file_id, project_root)? {
+            if let Some(func_info) = self.search_function_in_module(db, vfs, child, function_name, target_file_id)? {
                 return Ok(Some(func_info));
             }
         }
@@ -348,16 +368,16 @@ impl flags::SourceFinder {
         Ok(None)
     }
     
-    /// Analyze function calls for a specific function
-    fn analyze_function_calls(
+    /// Analyze function calls for a specific function and return JSON-compatible structure
+    fn analyze_function_calls_json(
         &self,
         analysis: &Analysis,
         func_info: &FunctionInfo,
         vfs: &Vfs,
         db: &ide::RootDatabase,
         project_root: &AbsPathBuf,
-    ) -> Result<Vec<CallRelation>> {
-        let mut call_relations = Vec::new();
+    ) -> Result<Vec<FunctionCall>> {
+        let mut function_calls = Vec::new();
         
         if let Some(file_id) = self.find_file_id_by_path(vfs, &func_info.file_path) {
             let editioned_file_id = EditionedFileId::current_edition(db, file_id);
@@ -378,14 +398,13 @@ impl flags::SourceFinder {
                     
                     if let Ok(Some(outgoing_calls)) = analysis.outgoing_calls(config, position) {
                         for call_item in outgoing_calls {
-                            if let Some(call_relation) = self.create_call_relation_from_item(
-                                func_info,
+                            if let Some(function_call) = self.create_function_call_from_item(
                                 &call_item,
                                 vfs,
                                 db,
                                 project_root,
                             )? {
-                                call_relations.push(call_relation);
+                                function_calls.push(function_call);
                             }
                         }
                     }
@@ -393,23 +412,27 @@ impl flags::SourceFinder {
             }
         }
         
-        Ok(call_relations)
+        Ok(function_calls)
     }
     
-    /// Create call relation from call item
-    fn create_call_relation_from_item(
+    /// Create function call from call item
+    fn create_function_call_from_item(
         &self,
-        caller_func: &FunctionInfo,
         call_item: &CallItem,
         vfs: &Vfs,
         db: &ide::RootDatabase,
         project_root: &AbsPathBuf,
-    ) -> Result<Option<CallRelation>> {
+    ) -> Result<Option<FunctionCall>> {
         let target = &call_item.target;
         
         let file_id = target.file_id;
         let path = vfs.file_path(file_id);
         let file_path = path.to_string();
+        
+        // Filter out external library calls
+        if self.is_external_path(&file_path, project_root) {
+            return Ok(None);
+        }
         
         let editioned_file_id = EditionedFileId::current_edition(db, file_id);
         let line_index = db.line_index(editioned_file_id.file_id(db));
@@ -419,54 +442,30 @@ impl flags::SourceFinder {
             return Ok(None);
         }
         
-        let line_col = line_index.line_col(target_range.start());
-        
-        let callee_info = FunctionInfo {
-            name: target.name.to_string(),
-            file_path: file_path.clone(),
-            line: line_col.line + 1,
-            column: line_col.col + 1,
+        let function_call = FunctionCall {
+            file: self.convert_to_relative_path(&file_path, project_root),
+            function_name: target.name.to_string(),
+            module: self.extract_file_name(&file_path),
         };
         
-        // Filter out external library calls
-        if self.is_external_path(&caller_func.file_path, project_root) {
-            return Ok(None);
-        }
-        
-
-        
-        let call_relation = CallRelation {
-            callee: callee_info,
-        };
-        
-        Ok(Some(call_relation))
+        Ok(Some(function_call))
     }
     
     /// Check if a file path is external to the project
     fn is_external_path(&self, file_path: &str, project_root: &AbsPathBuf) -> bool {
         let project_root_str = project_root.to_string();
         
+        // Check if file is outside project root
         if !file_path.starts_with(&project_root_str) {
             return true;
         }
         
-        if file_path.contains(".cargo/registry/") ||
-           file_path.contains(".cargo/git/") {
-            return true;
-        }
-        
-        if file_path.contains(".cargo/registry/") && 
-           (file_path.contains("anchor-") || file_path.contains("/anchor/")) {
-            return true;
-        }
-        
-        if file_path.contains("/target/") ||
-           file_path.contains("/build/") ||
-           file_path.contains("/deps/") {
-            return true;
-        }
-        
-        false
+        // Check for cargo dependencies and build artifacts
+        file_path.contains(".cargo/registry/") ||
+        file_path.contains(".cargo/git/") ||
+        file_path.contains("/target/") ||
+        file_path.contains("/build/") ||
+        file_path.contains("/deps/")
     }
     
     /// Convert to relative path
@@ -480,4 +479,15 @@ impl flags::SourceFinder {
             file_path.to_string()
         }
     }
+    
+    /// Extract file name from file path (used for contract/module names)
+    fn extract_file_name(&self, file_path: &str) -> String {
+        let path = std::path::Path::new(file_path);
+        if let Some(file_stem) = path.file_stem() {
+            file_stem.to_string_lossy().to_string()
+        } else {
+            "Unknown".to_string()
+        }
+    }
+
 }

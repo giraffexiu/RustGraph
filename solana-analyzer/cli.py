@@ -9,14 +9,10 @@ import sys
 import argparse
 import json
 from pathlib import Path
-from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from interface import (
-    RustProjectAnalyzer, AnalysisConfig, AnalyzerType, OutputFormat,
-    FileOutputHandler, CallbackOutputHandler
-)
+from interface import SolanaAnalyzer
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -36,9 +32,6 @@ Examples:
   python cli.py call-graph /path/to/project
         """
     )
-    
-    # Global options
-    # No global options needed
     
     # Subcommands
     subparsers = parser.add_subparsers(dest="analyzer_type", help="Analyzer type", required=True)
@@ -74,52 +67,57 @@ def validate_args(args) -> bool:
     return True
 
 
-def create_config_from_args(args) -> AnalysisConfig:
-    """Create analysis config from command line arguments"""
-    analyzer_type_map = {
-        "source-finder": AnalyzerType.SOURCE_FINDER,
-        "struct-analyzer": AnalyzerType.STRUCT_ANALYZER,
-        "call-graph": AnalyzerType.CALL_GRAPH
-    }
+def run_source_finder(args):
+    """Run source finder analysis"""
+    analyzer = SolanaAnalyzer(args.project_path)
+    result = analyzer.find_symbols(args.symbol_name)
     
-    analyzer_type = analyzer_type_map[args.analyzer_type]
-    
-    config = AnalysisConfig(
-        project_path=args.project_path,
-        analyzer_type=analyzer_type,
-        output_format=OutputFormat.JSON,
-        output_path=None,
-        output_base_dir=str(Path(__file__).parent / "output")
-    )
-    
-    # Source finder specific config
-    if analyzer_type == AnalyzerType.SOURCE_FINDER:
-        config.symbol_name = args.symbol_name
-    
-    return config
-
-
-def print_result_summary(result):
-    """Print result summary"""
-    if result.success:
-        # For source finder, output JSON results directly
-        if result.analyzer_type == AnalyzerType.SOURCE_FINDER and result.data:
-            print(json.dumps(result.data, indent=2, ensure_ascii=False))
-        else:
-            print("✓ Analysis completed")
-            print(f"  Analyzer: {result.analyzer_type.value}")
-            print(f"  Project: {result.config.project_path}")
-            
-            if result.execution_time:
-                print(f"  Time: {result.execution_time:.2f}s")
-            
-            if result.output_path:
-                print(f"  Output: {result.output_path}")
+    # Check if result is an error dictionary
+    if isinstance(result, dict) and "error" in result:
+        print(f"✗ Source finder failed: {result['error']}")
+        return False
     else:
-        print("✗ Analysis failed")
-        print(f"  Error: {result.error_message}")
-        if result.execution_time:
-            print(f"  Time: {result.execution_time:.2f}s")
+        # result is the raw JSON output from source_finder.rs, print it directly
+        print(result)
+        return True
+
+
+def run_struct_analyzer(args):
+    """Run struct analyzer"""
+    analyzer = SolanaAnalyzer(args.project_path)
+    result = analyzer.analyze_structs()
+    
+    if "error" in result:
+        print(f"✗ Struct analysis failed: {result['error']}")
+        return False
+    else:
+        print("✓ Struct analysis completed")
+        print(f"  Project: {args.project_path}")
+        print(f"  {result.get('summary', 'Analysis completed')}")
+        return True
+
+
+def run_call_graph_analyzer(args):
+    """Run call graph analyzer"""
+    analyzer = SolanaAnalyzer(args.project_path)
+    result = analyzer.analyze_call_graph()
+    
+    if "error" in result:
+        print(f"✗ Call graph analysis failed: {result['error']}")
+        return False
+    else:
+        print("✓ Call graph analysis completed")
+        print(f"  Project: {args.project_path}")
+        
+        # Try to find and display output file info
+        output_dir = Path(__file__).parent / "output"
+        if output_dir.exists():
+            json_files = list(output_dir.glob("*_call_graph.json"))
+            if json_files:
+                latest_file = max(json_files, key=lambda f: f.stat().st_mtime)
+                print(f"  Output: {latest_file}")
+        
+        return True
 
 
 def main():
@@ -130,14 +128,19 @@ def main():
     if not validate_args(args):
         sys.exit(1)
     
-    config = create_config_from_args(args)
+    success = False
     
-    analyzer = RustProjectAnalyzer()
-    result = analyzer.analyze(config)
+    if args.analyzer_type == "source-finder":
+        success = run_source_finder(args)
+    elif args.analyzer_type == "struct-analyzer":
+        success = run_struct_analyzer(args)
+    elif args.analyzer_type == "call-graph":
+        success = run_call_graph_analyzer(args)
+    else:
+        print(f"Error: Unknown analyzer type: {args.analyzer_type}")
+        sys.exit(1)
     
-    print_result_summary(result)
-    
-    sys.exit(0 if result.success else 1)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":

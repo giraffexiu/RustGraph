@@ -74,13 +74,13 @@ pip install -e .
 #### Symbol Finding
 ```bash
 # Find a specific function
-./target/release/rust-analyzer symbol-finder function my_function_name
+./target/release/rust-analyzer source-finder function my_function_name
 
 # Find a specific struct
-./target/release/rust-analyzer symbol-finder struct MyStruct
+./target/release/rust-analyzer source-finder struct MyStruct
 
 # Search in specific project
-./target/release/rust-analyzer symbol-finder function initialize --project-path /path/to/project
+./target/release/rust-analyzer source-finder function initialize --project-path /path/to/project
 ```
 
 ### Solana Analyzer
@@ -92,7 +92,7 @@ pip install -e .
 cd solana-analyzer
 
 # Symbol search
-python cli.py symbol-finder function my_function /path/to/project
+python cli.py source-finder function my_function /path/to/project
 
 # Struct analysis (outputs .rs file)
 python cli.py struct-analyzer /path/to/solana/project
@@ -157,14 +157,16 @@ pub struct Global {
 ### Symbol Search Output (JSON)
 ```json
 {
-    "symbols": [
-        {
-            "name": "initialize",
-            "type": "function",
-            "file_path": "src/lib.rs",
-            "line_number": 42
-        }
-    ]
+  "contract": "events",
+  "function": "CreateEvent",
+  "source": "#[event]\npub struct CreateEvent {\n    pub mint: Pubkey,\n    pub creator: Pubkey,\n    pub name: String,\n    pub symbol: String,\n    pub uri: String,\n    pub start_slot: u64,\n    pub virtual_sol_reserves: u64,\n    pub virtual_token_reserves: u64,\n    pub real_sol_reserves: u64,\n    pub real_token_reserves: u64,\n    pub token_total_supply: u64,\n}",
+  "location": {
+    "file": "programs/pump-science/src/events.rs",
+    "start_line": 14,
+    "end_line": 27
+  },
+  "parameter": [],
+  "calls": []
 }
 ```
 
