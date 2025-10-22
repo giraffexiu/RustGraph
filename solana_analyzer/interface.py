@@ -14,7 +14,8 @@ class SolanaAnalyzer:
     
     def __init__(self, project_path: str):
         self.project_path = Path(project_path)
-        self.rust_analyzer_path = Path(__file__).parent.parent / "target" / "release" / "rust-analyzer"
+        # Try to find rust-analyzer binary in multiple locations
+        self.rust_analyzer_path = self._find_rust_analyzer_binary()
     
     def find_symbols(self, symbol_name: str):
         """Find symbols in the project using source-finder"""
@@ -140,20 +141,63 @@ class SolanaAnalyzer:
         cargo_toml = self.project_path / "Cargo.toml"
         return cargo_toml.exists()
     
+    def _find_rust_analyzer_binary(self) -> Path:
+        """Find rust-analyzer binary in multiple possible locations"""
+        # Possible locations for rust-analyzer binary
+        possible_paths = [
+            # 1. In the same directory as this package (for development)
+            Path(__file__).parent.parent / "target" / "release" / "rust-analyzer",
+            # 2. In package data directory (for installed package)
+            Path(__file__).parent / "bin" / "rust-analyzer",
+            # 3. In system PATH
+            Path("rust-analyzer"),  # Will be resolved by subprocess
+            # 4. Relative to package root
+            Path(__file__).parent.parent / "rust-analyzer",
+        ]
+        
+        for path in possible_paths:
+            if path.name == "rust-analyzer" and path.parent.name in ["bin", "release"]:
+                if path.exists():
+                    return path
+            elif path.name == "rust-analyzer":
+                # For system PATH, we'll try it in subprocess
+                try:
+                    result = subprocess.run(["which", "rust-analyzer"], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        return Path(result.stdout.strip())
+                except:
+                    continue
+        
+        # Default to the development location
+        return Path(__file__).parent.parent / "target" / "release" / "rust-analyzer"
+    
     def _ensure_rust_analyzer_built(self):
         """Ensure rust-analyzer binary is built"""
         if not self.rust_analyzer_path.exists():
             print("Building rust-analyzer...")
+            # Try to find the project root for building
+            project_root = self._find_project_root()
             build_cmd = ["cargo", "build", "--release"]
             build_result = subprocess.run(
                 build_cmd,
-                cwd=self.rust_analyzer_path.parent.parent.parent,
+                cwd=project_root,
                 capture_output=True,
                 text=True
             )
             
             if build_result.returncode != 0:
                 raise Exception(f"Failed to build rust-analyzer: {build_result.stderr}")
+    
+    def _find_project_root(self) -> Path:
+        """Find the project root directory containing Cargo.toml"""
+        current = Path(__file__).parent
+        while current != current.parent:
+            if (current / "Cargo.toml").exists():
+                return current
+            current = current.parent
+        
+        # Fallback to parent directory
+        return Path(__file__).parent.parent
     
 
     def _run_json_analyzer(self, input_file: str) -> Optional[Dict[str, Any]]:

@@ -1,3 +1,34 @@
+Metadata-Version: 2.1
+Name: solana-analyzer
+Version: 1.0.0
+Summary: A comprehensive Rust project analyzer for Solana development
+Author: Solana Analyzer Team
+Maintainer: Solana Analyzer Team
+License: MIT
+Project-URL: Homepage, https://github.com/your-repo/solana-analyzer
+Project-URL: Repository, https://github.com/your-repo/solana-analyzer.git
+Project-URL: Issues, https://github.com/your-repo/solana-analyzer/issues
+Keywords: rust,analyzer,solana,blockchain,code-analysis
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Code Generators
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Rust
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+Provides-Extra: dev
+Requires-Dist: pytest>=6.0; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: flake8; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+
 # Solana Analyzer
 
 一个用于分析 Solana/Rust 项目的 Python 包，基于 rust-analyzer 提供强大的代码分析功能。
