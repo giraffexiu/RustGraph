@@ -1,0 +1,28 @@
+# Include Rust source code and build files
+include Cargo.toml
+include Cargo.lock
+include build_rust.py
+recursive-include crates *.rs *.toml
+recursive-include lib *.rs *.toml *.md
+include .cargo/config.toml
+
+# Include Python package files
+recursive-include solana_fcg_tool *.py *.md
+recursive-include solana_fcg_tool/output *
+
+# Include documentation
+include README.md
+include LICENSE*
+
+# Exclude unnecessary files
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude .git*
+exclude target/
+recursive-exclude target *
+exclude .rust-analyzer-cache/
+recursive-exclude .rust-analyzer-cache *
+exclude 2025-01-pump-science/
+recursive-exclude 2025-01-pump-science *

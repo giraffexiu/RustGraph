@@ -1,18 +1,12 @@
-#!/usr/bin/env python3
 import sys
 from pathlib import Path
 def example_basic_usage():
-    """Basic usage example"""
-    print("="*60)
-    print("Basic Usage Example")
-    print("="*60)
-    
     try:
         # Import the package
-        from solana_analyzer import SolanaAnalyzer
+        from solana_fcg_tool import SolanaAnalyzer
         
-        # Example project path (modify this to your actual project)
-        project_path = "/Users/giraffe/Downloads/Work/Solana/Anchor-Analyze/RustGraph/2025-01-pump-science"
+        # Use the sample project inside this repo for a quick smoke test
+        project_path = str(Path(__file__).parent / "2025-01-pump-science")
         
         print(f"Analyzing project: {project_path}")
         
@@ -36,7 +30,8 @@ def example_basic_usage():
         
     except ImportError as e:
         print(f"Import error: {e}")
-        print("Make sure the package is installed: pip install -e .")
+        print("Make sure the package is installed.")
+        print("For TestPyPI: python -m pip install --index-url https://test.pypi.org/simple/ --no-deps solana-fcg-tool==1.0.0")
     except Exception as e:
         print(f"Error: {e}")
 
@@ -49,10 +44,10 @@ def example_convenience_functions():
     
     try:
         # Import convenience functions
-        from solana_analyzer import find_symbols, analyze_structs, analyze_call_graph
+        from solana_fcg_tool import find_symbols, analyze_structs, analyze_call_graph
         
-        # Example project path
-        project_path = "/path/to/your/rust/project"
+        # Use the sample project so the command works out-of-the-box
+        project_path = str(Path(__file__).parent / "2025-01-pump-science")
         
         print(f"Analyzing project: {project_path}")
         
@@ -86,16 +81,21 @@ def example_cli_usage():
         import subprocess
         import sys
         
-        # Example project path
-        project_path = "/path/to/your/rust/project"
+        # Use the sample project so the example works out-of-the-box
+        project_path = str(Path(__file__).parent / "2025-01-pump-science")
         
         print(f"Analyzing project: {project_path}")
         
-        # Example CLI commands
+        # Prefer CLI from .venv-testpypi if available (installed from TestPyPI)
+        repo_root = Path(__file__).parent
+        test_cli = repo_root / ".venv-testpypi" / "bin" / "solana-fcg-tool"
+        cli = str(test_cli) if test_cli.exists() else "solana-fcg-tool"
+
+        # Example CLI commands (struct-analyzer doesn't require rust-analyzer)
         commands = [
-            ["solana-analyzer", "source-finder", "main", project_path],
-            ["solana-analyzer", "struct-analyzer", project_path],
-            ["solana-analyzer", "call-graph", project_path],
+            [cli, "struct-analyzer", project_path],
+            [cli, "source-finder", "main", project_path],
+            [cli, "call-graph", project_path],
         ]
         
         for cmd in commands:
@@ -111,6 +111,7 @@ def example_cli_usage():
                 print("Command timed out")
             except FileNotFoundError:
                 print("Command not found. Make sure the package is installed.")
+                print("For TestPyPI: python -m pip install --index-url https://test.pypi.org/simple/ --no-deps solana-fcg-tool==1.0.0")
             except Exception as e:
                 print(f"Error: {e}")
         
@@ -146,7 +147,7 @@ def example_with_real_project():
         print(f"Found Rust project: {rust_project}")
         
         try:
-            from solana_analyzer import SolanaAnalyzer
+            from solana_fcg_tool import SolanaAnalyzer
             
             analyzer = SolanaAnalyzer(str(rust_project))
             
@@ -169,8 +170,8 @@ def main():
     
     # Check if package is installed
     try:
-        import solana_analyzer
-        print(f"✓ Package is installed (version: {solana_analyzer.__version__})")
+        import solana_fcg_tool
+        print(f"✓ Package is installed (version: {solana_fcg_tool.__version__})")
     except ImportError:
         print("✗ Package is not installed")
         print("Please run: pip install -e .")

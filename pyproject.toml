@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "solana-analyzer"
-version = "1.0.0"
+name = "solana-fcg-tool"
+version = "1.0.2"
 description = "A comprehensive Rust project analyzer for Solana development"
 readme = "README.md"
 license = {text = "MIT"}
@@ -46,14 +46,14 @@ Repository = "https://github.com/your-repo/solana-analyzer.git"
 Issues = "https://github.com/your-repo/solana-analyzer/issues"
 
 [project.scripts]
-solana-analyzer = "solana_analyzer.cli:main"
+solana-fcg-tool = "solana_fcg_tool.cli:main"
 
 [tool.setuptools]
-packages = ["solana_analyzer"]
+packages = ["solana_fcg_tool"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-solana_analyzer = ["bin/*", "output/*", "*.md"]
+solana_fcg_tool = ["bin/*", "output/structures.rs", "*.md"]
 
 [tool.black]
 line-length = 88

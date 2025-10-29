@@ -1,0 +1,2 @@
+[console_scripts]
+solana-fcg-tool = solana_fcg_tool.cli:main

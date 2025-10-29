@@ -1,2 +1,0 @@
-[console_scripts]
-solana-analyzer = solana_analyzer.cli:main
