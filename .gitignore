@@ -16,3 +16,4 @@ docs/book/src/diagnostics_generated.md
 docs/book/src/features_generated.md
 build.log
 ./2025-01-pump-science
+.vscode/*
