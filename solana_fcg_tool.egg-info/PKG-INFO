@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: solana-fcg-tool
-Version: 1.0.3
+Version: 1.0.4
 Summary: A comprehensive Rust project analyzer for Solana development with multi-platform support
 Home-page: https://github.com/yourusername/solana-fcg-tool
 Author: Solana Analyzer Team
