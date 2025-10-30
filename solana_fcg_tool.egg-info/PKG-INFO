@@ -50,8 +50,8 @@ Requires-Dist: mypy; extra == "dev"
 pip install solana-fcg-tool
 ```
 
-- 当前版本：`1.0.2`
-- 项目主页：`https://pypi.org/project/solana-fcg-tool/1.0.2/`
+- 当前版本：`1.0.3`
+- 项目主页：`https://pypi.org/project/solana-fcg-tool/1.0.3/`
 
 > **新特性**：从 v1.0.1 开始，pip install 会自动检测并安装 Rust 环境，然后构建定制版 rust-analyzer 二进制。无需手动配置！
 
