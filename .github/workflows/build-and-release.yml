@@ -1,0 +1,213 @@
+name: Build and Release Multi-Platform
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-binaries:
+    name: Build rust-analyzer for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: rust-analyzer
+            artifact_name: rust-analyzer-linux-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            binary_name: rust-analyzer
+            artifact_name: rust-analyzer-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary_name: rust-analyzer
+            artifact_name: rust-analyzer-macos-aarch64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary_name: rust-analyzer.exe
+            artifact_name: rust-analyzer-windows-x86_64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build rust-analyzer
+      run: |
+        cargo build --release --bin rust-analyzer --target ${{ matrix.target }}
+
+    - name: Prepare binary
+      shell: bash
+      run: |
+        mkdir -p artifacts
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          cp target/${{ matrix.target }}/release/rust-analyzer.exe artifacts/${{ matrix.binary_name }}
+        else
+          cp target/${{ matrix.target }}/release/rust-analyzer artifacts/${{ matrix.binary_name }}
+        fi
+        
+        # Make executable on Unix systems
+        if [[ "${{ matrix.os }}" != "windows-latest" ]]; then
+          chmod +x artifacts/${{ matrix.binary_name }}
+        fi
+
+    - name: Upload binary artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: artifacts/${{ matrix.binary_name }}
+
+  build-python-package:
+    name: Build Python Package
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build wheel setuptools
+
+    - name: Download all binary artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts/
+
+    - name: Organize binaries
+      run: |
+        mkdir -p solana_fcg_tool/bin
+        
+        # Copy binaries with platform-specific names
+        cp artifacts/rust-analyzer-linux-x86_64/rust-analyzer solana_fcg_tool/bin/rust-analyzer-linux-x86_64
+        cp artifacts/rust-analyzer-macos-x86_64/rust-analyzer solana_fcg_tool/bin/rust-analyzer-macos-x86_64
+        cp artifacts/rust-analyzer-macos-aarch64/rust-analyzer solana_fcg_tool/bin/rust-analyzer-macos-aarch64
+        cp artifacts/rust-analyzer-windows-x86_64/rust-analyzer.exe solana_fcg_tool/bin/rust-analyzer-windows-x86_64.exe
+        
+        # Make all binaries executable
+        chmod +x solana_fcg_tool/bin/rust-analyzer-*
+        
+        ls -la solana_fcg_tool/bin/
+
+    - name: Build Python package
+      run: |
+        python -m build
+
+    - name: Upload Python package artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-package
+        path: dist/
+
+  test-package:
+    name: Test Package on ${{ matrix.os }}
+    needs: build-python-package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+        exclude:
+          # Reduce matrix size for faster builds
+          - os: macos-latest
+            python-version: '3.9'
+          - os: windows-latest
+            python-version: '3.9'
+
+    steps:
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Download Python package
+      uses: actions/download-artifact@v3
+      with:
+        name: python-package
+        path: dist/
+
+    - name: Install and test package
+      shell: bash
+      run: |
+        # Install the wheel package
+        pip install dist/*.whl
+        
+        # Test basic import
+        python -c "import solana_fcg_tool; print('Import successful')"
+        
+        # Test CLI availability
+        solana-fcg-tool --help
+
+  release:
+    name: Create Release
+    needs: [build-python-package, test-package]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download Python package
+      uses: actions/download-artifact@v3
+      with:
+        name: python-package
+        path: dist/
+
+    - name: Download binary artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: artifacts/
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/*
+          artifacts/*/rust-analyzer*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        skip_existing: true

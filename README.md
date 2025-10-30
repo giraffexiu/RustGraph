@@ -45,28 +45,6 @@ pip install solana-fcg-tool
 pip install -e .
 ```
 
-### 安装验证
-
-安装完成后，可以运行验证脚本确保一切正常：
-
-```bash
-# 下载验证脚本
-curl -O https://raw.githubusercontent.com/your-repo/solana-analyzer/main/verify_installation.py
-
-# 运行验证
-python verify_installation.py
-```
-
-或者手动验证：
-
-```bash
-# 检查 CLI 是否可用
-solana-fcg-tool --help
-
-# 检查 Python API
-python -c "from solana_fcg_tool import SolanaAnalyzer; print('✓ 安装成功')"
-```
-
 ## 二进制依赖（重要）
 
 本工具需要一个包含自定义子命令的 rust-analyzer 可执行文件。你可以：

@@ -1,8 +1,10 @@
 Metadata-Version: 2.1
 Name: solana-fcg-tool
-Version: 1.0.2
-Summary: A comprehensive Rust project analyzer for Solana development
+Version: 1.0.3
+Summary: A comprehensive Rust project analyzer for Solana development with multi-platform support
+Home-page: https://github.com/yourusername/solana-fcg-tool
 Author: Solana Analyzer Team
+Author-email: your.email@example.com
 Maintainer: Solana Analyzer Team
 License: MIT
 Project-URL: Homepage, https://github.com/your-repo/solana-analyzer
@@ -48,8 +50,8 @@ Requires-Dist: mypy; extra == "dev"
 pip install solana-fcg-tool
 ```
 
-- 当前版本：`1.0.1`
-- 项目主页：`https://pypi.org/project/solana-fcg-tool/1.0.1/`
+- 当前版本：`1.0.2`
+- 项目主页：`https://pypi.org/project/solana-fcg-tool/1.0.2/`
 
 > **新特性**：从 v1.0.1 开始，pip install 会自动检测并安装 Rust 环境，然后构建定制版 rust-analyzer 二进制。无需手动配置！
 
@@ -74,28 +76,6 @@ pip install solana-fcg-tool
 
 ```bash
 pip install -e .
-```
-
-### 安装验证
-
-安装完成后，可以运行验证脚本确保一切正常：
-
-```bash
-# 下载验证脚本
-curl -O https://raw.githubusercontent.com/your-repo/solana-analyzer/main/verify_installation.py
-
-# 运行验证
-python verify_installation.py
-```
-
-或者手动验证：
-
-```bash
-# 检查 CLI 是否可用
-solana-fcg-tool --help
-
-# 检查 Python API
-python -c "from solana_fcg_tool import SolanaAnalyzer; print('✓ 安装成功')"
 ```
 
 ## 二进制依赖（重要）

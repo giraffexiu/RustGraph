@@ -1402,4 +1402,5 @@ solana_fcg_tool.egg-info/not-zip-safe
 solana_fcg_tool.egg-info/requires.txt
 solana_fcg_tool.egg-info/top_level.txt
 solana_fcg_tool/bin/rust-analyzer
+solana_fcg_tool/bin/rust-analyzer-macos-aarch64
 solana_fcg_tool/output/2025-01-pump-science_call_graph.json
