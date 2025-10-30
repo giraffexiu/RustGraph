@@ -31,7 +31,7 @@ def example_basic_usage():
     except ImportError as e:
         print(f"Import error: {e}")
         print("Make sure the package is installed.")
-        print("For TestPyPI: python -m pip install --index-url https://test.pypi.org/simple/ --no-deps solana-fcg-tool==1.0.0")
+        print("For TestPyPI: python -m pip install --index-url https://test.pypi.org/simple/ --no-deps solana-fcg-tool==1.0.3")
     except Exception as e:
         print(f"Error: {e}")
 
@@ -111,7 +111,7 @@ def example_cli_usage():
                 print("Command timed out")
             except FileNotFoundError:
                 print("Command not found. Make sure the package is installed.")
-                print("For TestPyPI: python -m pip install --index-url https://test.pypi.org/simple/ --no-deps solana-fcg-tool==1.0.0")
+                print("For TestPyPI: python -m pip install --index-url https://test.pypi.org/simple/ --no-deps solana-fcg-tool==1.0.3")
             except Exception as e:
                 print(f"Error: {e}")
         

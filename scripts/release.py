@@ -41,7 +41,8 @@ def update_version(version):
     setup_py = project_root / "setup.py"
     if setup_py.exists():
         content = setup_py.read_text()
-        new_content, n = re.subn(r'(version\s*=\s*")([^\"]+)(")', rf"\1{version}\3", content)
+        # Use \g<1>/\g<3> to avoid backreference + digits merging (e.g. \1 + "1.0.3" -> \11)
+        new_content, n = re.subn(r'(version\s*=\s*")([^\"]+)(")', rf"\g<1>{version}\g<3>", content)
         if n > 0:
             setup_py.write_text(new_content)
             print(f"Updated version in setup.py to {version}")
@@ -52,7 +53,7 @@ def update_version(version):
     init_py = project_root / "solana_fcg_tool" / "__init__.py"
     if init_py.exists():
         content = init_py.read_text()
-        new_content, n = re.subn(r'(__version__\s*=\s*")([^\"]+)(")', rf"\1{version}\3", content)
+        new_content, n = re.subn(r'(__version__\s*=\s*")([^\"]+)(")', rf"\g<1>{version}\g<3>", content)
         if n > 0:
             init_py.write_text(new_content)
             print(f"Updated __version__ in solana_fcg_tool/__init__.py to {version}")
@@ -63,7 +64,7 @@ def update_version(version):
     pyproject_toml = project_root / "pyproject.toml"
     if pyproject_toml.exists():
         content = pyproject_toml.read_text()
-        new_content, n = re.subn(r'(^\s*version\s*=\s*")([^\"]+)(")', rf"\1{version}\3", content, flags=re.MULTILINE)
+        new_content, n = re.subn(r'(^\s*version\s*=\s*")([^\"]+)(")', rf"\g<1>{version}\g<3>", content, flags=re.MULTILINE)
         if n > 0:
             pyproject_toml.write_text(new_content)
             print(f"Updated version in pyproject.toml to {version}")
