@@ -8,6 +8,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-binaries:
     name: Build rust-analyzer for ${{ matrix.os }}
@@ -193,12 +196,31 @@ jobs:
       with:
         path: artifacts/
 
+    - name: Rename binaries for release
+      run: |
+        test -f artifacts/rust-analyzer-linux-x86_64/rust-analyzer && \
+          mv artifacts/rust-analyzer-linux-x86_64/rust-analyzer artifacts/rust-analyzer-linux-x86_64/rust-analyzer-linux-x86_64 || \
+          echo "linux x86_64 artifact not found, skipping"
+        test -f artifacts/rust-analyzer-macos-x86_64/rust-analyzer && \
+          mv artifacts/rust-analyzer-macos-x86_64/rust-analyzer artifacts/rust-analyzer-macos-x86_64/rust-analyzer-macos-x86_64 || \
+          echo "macos x86_64 artifact not found, skipping"
+        test -f artifacts/rust-analyzer-macos-aarch64/rust-analyzer && \
+          mv artifacts/rust-analyzer-macos-aarch64/rust-analyzer artifacts/rust-analyzer-macos-aarch64/rust-analyzer-macos-aarch64 || \
+          echo "macos aarch64 artifact not found, skipping"
+        test -f artifacts/rust-analyzer-windows-x86_64/rust-analyzer.exe && \
+          mv artifacts/rust-analyzer-windows-x86_64/rust-analyzer.exe artifacts/rust-analyzer-windows-x86_64/rust-analyzer-windows-x86_64.exe || \
+          echo "windows x86_64 artifact not found, skipping"
+
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
           dist/*
-          artifacts/*/rust-analyzer*
+          artifacts/rust-analyzer-linux-x86_64/rust-analyzer-linux-x86_64
+          artifacts/rust-analyzer-macos-x86_64/rust-analyzer-macos-x86_64
+          artifacts/rust-analyzer-macos-aarch64/rust-analyzer-macos-aarch64
+          artifacts/rust-analyzer-windows-x86_64/rust-analyzer-windows-x86_64.exe
+        fail_on_unmatched_files: false
         draft: false
         prerelease: false
         generate_release_notes: true
