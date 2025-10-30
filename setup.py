@@ -139,7 +139,7 @@ def get_package_data():
 
 setup(
     name="solana-fcg-tool",
-    version="1.0.4",
+    version="1.0.5",
     description="A Rust project analyzer for Solana development with multi-platform support",
     long_description=long_description,
     long_description_content_type="text/markdown",
