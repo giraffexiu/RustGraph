@@ -6,6 +6,7 @@ This script helps with creating releases and managing versions
 
 import os
 import sys
+import re
 import subprocess
 import argparse
 from pathlib import Path
@@ -33,24 +34,42 @@ def check_git_status():
 
 
 def update_version(version):
-    """Update version in setup.py and pyproject.toml"""
+    """Update version in setup.py, package __init__.py, and pyproject.toml (if present)."""
     project_root = Path(__file__).parent.parent
-    
-    # Update setup.py
+
+    # Update setup.py (robust regex, independent of current value)
     setup_py = project_root / "setup.py"
     if setup_py.exists():
         content = setup_py.read_text()
-        content = content.replace('version="1.0.3"', f'version="{version}"')
-        setup_py.write_text(content)
-        print(f"Updated version in setup.py to {version}")
-    
-    # Update pyproject.toml
+        new_content, n = re.subn(r'(version\s*=\s*")([^\"]+)(")', rf"\1{version}\3", content)
+        if n > 0:
+            setup_py.write_text(new_content)
+            print(f"Updated version in setup.py to {version}")
+        else:
+            print("Warning: Could not update version in setup.py via regex.")
+
+    # Update package __init__.py __version__
+    init_py = project_root / "solana_fcg_tool" / "__init__.py"
+    if init_py.exists():
+        content = init_py.read_text()
+        new_content, n = re.subn(r'(__version__\s*=\s*")([^\"]+)(")', rf"\1{version}\3", content)
+        if n > 0:
+            init_py.write_text(new_content)
+            print(f"Updated __version__ in solana_fcg_tool/__init__.py to {version}")
+        else:
+            print("Warning: Could not update __version__ in __init__.py via regex.")
+
+    # Update pyproject.toml (if it declares version)
     pyproject_toml = project_root / "pyproject.toml"
     if pyproject_toml.exists():
         content = pyproject_toml.read_text()
-        content = content.replace('version = "1.0.3"', f'version = "{version}"')
-        pyproject_toml.write_text(content)
-        print(f"Updated version in pyproject.toml to {version}")
+        new_content, n = re.subn(r'(^\s*version\s*=\s*")([^\"]+)(")', rf"\1{version}\3", content, flags=re.MULTILINE)
+        if n > 0:
+            pyproject_toml.write_text(new_content)
+            print(f"Updated version in pyproject.toml to {version}")
+        else:
+            # Not all projects declare version in pyproject.toml; that's fine.
+            print("Note: No version field updated in pyproject.toml (may be using setup.py only).")
 
 
 def build_package():
